@@ -104,7 +104,7 @@
       <div id="form-result" class="form-result" aria-live="polite"></div>
     </form>
   </details>
-  <details id="agent-control" class="new-task live-run"></details>
+  <section id="agent-control" class="new-task live-run"></section>
   <section id="contract" class="contract"></section>
   <section id="summary" class="summary"></section>
   <div class="section-head"><h2>Run receipts</h2><div><span id="last-updated" class="muted"></span><button type="button" onclick="loadState(false)">Refresh runs</button></div></div>
@@ -114,6 +114,9 @@
 <script>
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const duration = seconds => seconds < 60 ? `${seconds.toFixed(1)}s` : `${(seconds / 60).toFixed(1)}m`;
+const LIVE_REFRESH_MS = 2000;
+const IDLE_REFRESH_MS = 30000;
+let refreshTimer;
 async function evaluateRun(id, proved) {
   const evidence = window.prompt('What evidence supports this decision?') ?? '';
   const response = await fetch(`/api/receipts/${encodeURIComponent(id)}/evaluation`, {
@@ -145,10 +148,8 @@ async function stopAgent() {
   if (!response.ok) { alert(data.message || 'Could not stop agent.'); return; }
   await loadState(false);
 }
-let previousAgentStatus = null;
 function renderAgentRun(run) {
   const control = document.querySelector('#agent-control');
-  const wasOpen = control.open;
   const previousOutput = document.querySelector('#agent-control .live-output');
   const previousScrollTop = previousOutput?.scrollTop || 0;
   const wasAtBottom = !previousOutput || previousOutput.scrollHeight - previousOutput.clientHeight - previousScrollTop <= 2;
@@ -158,13 +159,29 @@ function renderAgentRun(run) {
     ? `<button class="stop" type="button" onclick="stopAgent()">Stop agent</button>`
     : `<button type="button" onclick="runAgent()">Run saved task</button>`;
   const output = run.lines?.length ? `<div class="live-output">${run.lines.map(esc).join('<br>')}</div>` : '';
-  control.innerHTML = `<summary><span class="live-head"><span><strong>Agent run</strong><br><span class="${statusClass}">${esc(run.status)}</span> · ${duration(run.elapsed_seconds)}</span></span></summary><div>${controls}</div>${output}`;
-  control.open = previousAgentStatus === null
-    ? run.status !== 'completed'
-    : (running && !['running', 'stopping'].includes(previousAgentStatus)) || wasOpen;
-  previousAgentStatus = run.status;
+  control.innerHTML = `<div class="live-head"><div><h2>Agent run</h2><span class="${statusClass}">${esc(run.status)}</span> · ${duration(run.elapsed_seconds)}</div>${controls}</div>${output}`;
   const nextOutput = document.querySelector('#agent-control .live-output');
   if (nextOutput) nextOutput.scrollTop = wasAtBottom ? nextOutput.scrollHeight : previousScrollTop;
+}
+const agentIsActive = run => run.status === 'running' || run.status === 'stopping';
+function scheduleRefresh(run) {
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(agentIsActive(run) ? loadAgentStatus : () => loadState(false), agentIsActive(run) ? LIVE_REFRESH_MS : IDLE_REFRESH_MS);
+}
+async function loadAgentStatus() {
+  try {
+    const response = await fetch('/api/agent/status', {cache: 'no-store'});
+    if (!response.ok) throw new Error(`server returned ${response.status}`);
+    const run = await response.json();
+    renderAgentRun(run);
+    if (!agentIsActive(run)) {
+      await loadState(false); // Refresh receipts once immediately when the run finishes.
+      return;
+    }
+    scheduleRefresh(run);
+  } catch (error) {
+    scheduleRefresh({status: 'running'});
+  }
 }
 document.querySelector('#quick-task-form').addEventListener('submit', async event => {
   event.preventDefault();
@@ -204,7 +221,8 @@ async function loadState(populateForm = false) {
   const response = await fetch('/api/state', {cache: 'no-store'});
   if (!response.ok) throw new Error(`server returned ${response.status}`);
   const {contract: c, receipts, active_run} = await response.json();
-  renderAgentRun(active_run || {status:'idle',elapsed_seconds:0,lines:[]});
+  const run = active_run || {status:'idle',elapsed_seconds:0,lines:[]};
+  renderAgentRun(run);
   const form = document.querySelector('#task-form');
   if (populateForm) {
     for (const field of ['problem','user','current_workaround','success']) form.elements[field].value = c[field] || '';
@@ -265,19 +283,13 @@ async function loadState(populateForm = false) {
     if (card) card.querySelector('details')?.setAttribute('open', '');
   }
   document.querySelector('#last-updated').textContent = `Updated ${new Date().toLocaleTimeString()} · `;
+  scheduleRefresh(run);
   } catch (error) {
     document.querySelector('#last-updated').textContent = 'Update failed · ';
     document.querySelector('#runs').textContent = `Could not load dashboard: ${error}`;
   }
 }
 loadState(true);
-setInterval(() => {
-  const selection = window.getSelection();
-  const runs = document.querySelector('#runs');
-  if (selection && !selection.isCollapsed &&
-      (runs.contains(selection.anchorNode) || runs.contains(selection.focusNode))) return;
-  loadState(false);
-}, 5000);
 </script>
 </body>
 </html>

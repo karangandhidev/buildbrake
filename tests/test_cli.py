@@ -35,10 +35,15 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertIn("Stop agent", html)
         self.assertIn("/api/agent/start", html)
         self.assertIn("/api/agent/stop", html)
+        self.assertIn('<section id="agent-control"', html)
+        self.assertNotIn('<details id="agent-control"', html)
 
     def test_dashboard_live_terminal_refresh_and_scrolling(self):
         html = (ROOT / "src/buildbrake/static/index.html").read_text()
-        self.assertIn("}, 5000);", html)
+        self.assertIn("const LIVE_REFRESH_MS = 2000", html)
+        self.assertIn("const IDLE_REFRESH_MS = 30000", html)
+        self.assertIn("/api/agent/status", html)
+        self.assertIn("await loadState(false); // Refresh receipts once immediately", html)
         self.assertIn("wasAtBottom", html)
         self.assertIn("nextOutput.scrollHeight : previousScrollTop", html)
         self.assertIn(".terminal-alternative { max-width: none; width: 100%; }", html)

@@ -151,6 +151,9 @@ def make_handler(root: Path, run_manager: AgentRunManager):
                     "contract": contract, "receipts": receipts, "active_run": run_manager.snapshot(),
                 }))
                 return
+            if path == "/api/agent/status":
+                self.send_bytes(200, "application/json", json_bytes(run_manager.snapshot()))
+                return
             self.send_bytes(404, "application/json", json_bytes({"error": "not found"}))
 
         def do_POST(self) -> None:
