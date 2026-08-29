@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BuildBrake</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #080b12; color: #f4f6fb; }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 15% 0%, rgba(112, 224, 155, .11), transparent 32rem), radial-gradient(circle at 90% 8%, rgba(111, 124, 255, .12), transparent 30rem), #080b12; }
+    body::before { content: ''; position: fixed; inset: 0; pointer-events: none; opacity: .18; background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px); background-size: 32px 32px; mask-image: linear-gradient(to bottom, black, transparent 72%); }
+    main { position: relative; max-width: 1080px; margin: 0 auto; padding: 48px 24px 80px; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 38px; }
+    h1 { font-size: clamp(2.5rem, 7vw, 4.75rem); line-height: .95; letter-spacing: -.065em; margin: 0; }
+    h2 { font-size: .76rem; color: #8f99ab; text-transform: uppercase; letter-spacing: .16em; }
+    .brand-copy { margin: 12px 0 0; color: #98a2b5; font-size: 1rem; }
+    .mark { background: linear-gradient(135deg, #76e5a0, #6fbaff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .pill { border: 1px solid rgba(118,229,160,.28); border-radius: 999px; padding: 9px 13px; color: #a8e7be; background: rgba(112,224,155,.07); font-size: .82rem; box-shadow: inset 0 1px rgba(255,255,255,.05); }
+    .pill::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: #70e09b; box-shadow: 0 0 12px #70e09b; }
+    .contract { border: 1px solid rgba(255,255,255,.08); background: rgba(17,21,30,.78); border-radius: 22px; padding: 28px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; box-shadow: 0 18px 55px rgba(0,0,0,.22); backdrop-filter: blur(12px); }
+    .new-task { border: 1px solid rgba(255,255,255,.09); background: linear-gradient(145deg, rgba(24,29,41,.94), rgba(14,18,27,.94)); border-radius: 24px; padding: 30px; margin-bottom: 20px; box-shadow: 0 22px 70px rgba(0,0,0,.3), inset 0 1px rgba(255,255,255,.04); }
+    .new-task h2 { margin-top: 0; }
+    .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    label { color: #aab2c0; font-size: .82rem; }
+    input, textarea { display: block; width: 100%; margin-top: 8px; border: 1px solid #303848; border-radius: 12px; background: rgba(7,10,16,.75); color: #f4f6fb; padding: 12px 14px; font: inherit; transition: border-color .2s, box-shadow .2s, background .2s; }
+    input:focus, textarea:focus { outline: none; border-color: #68c990; background: #0b1018; box-shadow: 0 0 0 4px rgba(112,224,155,.1); }
+    textarea { min-height: 84px; resize: vertical; }
+    textarea::placeholder, input::placeholder { color: #626d80; }
+    .wide { grid-column: 1 / -1; }
+    .primary { background: linear-gradient(135deg, #76e5a0, #62c98b); border-color: transparent; color: #07140c; font-weight: 750; margin-top: 16px; box-shadow: 0 8px 24px rgba(112,224,155,.16); }
+    .form-result { margin-top: 14px; line-height: 1.5; }
+    .quick-task textarea { min-height: 72px; }
+    .advanced-task { max-width: none; }
+    .advanced-task > summary { cursor: pointer; color: #aeb6c5; font-weight: 700; }
+    .advanced-task[open] > summary { margin-bottom: 22px; }
+    .command-box { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding: 12px; background: #090c10; border: 1px solid #343b47; border-radius: 10px; }
+    .command-box code { overflow-x: auto; white-space: nowrap; user-select: all; }
+    .terminal-alternative { max-width: none; width: 100%; }
+    .live-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+    .live-output { max-height: 320px; overflow: auto; background: #080b0f; border-radius: 10px; padding: 14px; margin-top: 14px; font-family: ui-monospace, SFMono-Regular, monospace; font-size: .82rem; line-height: 1.5; }
+    .stop { border-color: #7d3939; color: #ff8a82; }
+    .field strong { display: block; color: #838c9d; font-size: .75rem; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 8px; }
+    .field span { font-size: 1.05rem; line-height: 1.5; }
+    .success { grid-column: 1 / -1; border-left: 3px solid #70e09b; padding-left: 18px; }
+    .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 32px 0; }
+    .metric { border: 1px solid rgba(255,255,255,.07); background: linear-gradient(145deg, #171c27, #10141d); border-radius: 16px; padding: 20px; box-shadow: 0 12px 35px rgba(0,0,0,.18); }
+    .metric b { display: block; font-size: 2rem; letter-spacing: -.04em; margin-bottom: 4px; }
+    .metric span { color: #929bab; }
+    .runs { display: grid; gap: 16px; }
+    .run { border: 1px solid rgba(255,255,255,.08); background: rgba(16,19,27,.86); border-radius: 18px; padding: 24px; box-shadow: 0 14px 42px rgba(0,0,0,.18); transition: transform .2s, border-color .2s; }
+    .run:hover { transform: translateY(-2px); border-color: rgba(112,224,155,.2); }
+    .run-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 18px; }
+    .run-id { color: #8992a2; font-family: ui-monospace, SFMono-Regular, monospace; font-size: .82rem; }
+    .tag { border: 1px solid #343b47; border-radius: 999px; padding: 5px 9px; font-size: .75rem; }
+    .run-task { font-size: 1rem; line-height: 1.55; margin-bottom: 18px; }
+    .run-meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px 14px; }
+    .run-meta strong { display: block; color: #778091; font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 5px; }
+    .decision { border-top: 1px solid #252a33; margin-top: 18px; padding-top: 16px; }
+    .decision button { margin-top: 24px; }
+    .decision .proved-button { background: #70e09b; border-color: #70e09b; color: #07150c; font-weight: 700; }
+    .decision .not-proved-button { background: #ff7a70; border-color: #ff7a70; color: #1b0605; font-weight: 700; margin-left: 8px; }
+    .good { color: #70e09b; } .bad { color: #ff7a70; } .muted { color: #858e9f; }
+    .grade-A, .grade-B { color: #70e09b; } .grade-C { color: #f4c56a; } .grade-D, .grade-F { color: #ff7a70; }
+    button { appearance: none; border: 1px solid #394354; background: #1a202c; color: #edf0f6; border-radius: 10px; padding: 9px 13px; cursor: pointer; margin: 4px 4px 0 0; font: inherit; transition: transform .18s, border-color .18s, filter .18s; }
+    button:hover { border-color: #718096; filter: brightness(1.08); transform: translateY(-1px); }
+    button:focus-visible, summary:focus-visible { outline: 2px solid #70e09b; outline-offset: 3px; }
+    details { margin-top: 10px; max-width: 480px; }
+    summary { cursor: pointer; color: #9ea7b7; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; color: #c9cfda; font-family: inherit; line-height: 1.5; }
+    .empty { padding: 40px 0; color: #858e9f; }
+    .section-head { display: flex; align-items: center; justify-content: space-between; margin: 34px 0 24px; }
+    .section-head h2 { margin: 0; }
+    footer { margin-top: 48px; padding-top: 22px; border-top: 1px solid rgba(255,255,255,.06); color: #687386; font-size: .85rem; }
+    @media (max-width: 680px) { main { padding: 34px 16px 56px; } .contract, .summary, .run-meta, .form-grid { grid-template-columns: 1fr; } .wide { grid-column: auto; } header, .run-head { align-items: flex-start; flex-direction: column; } .new-task, .contract { padding: 22px; border-radius: 18px; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
+  </style>
+</head>
+<body>
+<main>
+  <header><div><h1>Build<span class="mark">Brake</span></h1><p class="brand-copy">Ship with proof, not guesswork.</p></div><div class="pill">Local &amp; private</div></header>
+  <section class="new-task quick-task">
+    <h2>What should the agent do?</h2>
+    <form id="quick-task-form">
+      <textarea name="prompt" placeholder="Example: Add color to the Proved and Not proved buttons so they are easy to distinguish" required></textarea>
+      <button class="primary" type="submit">Check and save</button>
+      <div id="quick-result" class="form-result" aria-live="polite"></div>
+    </form>
+  </section>
+  <details class="new-task advanced-task">
+    <summary>Advanced task details</summary>
+    <form id="task-form">
+      <div class="form-grid">
+        <label>Problem<input name="problem" required></label>
+        <label>Who experiences it<input name="user" required></label>
+        <label>Current workaround<input name="current_workaround" required></label>
+        <label>Observable success<input name="success" required></label>
+        <label>Budget (minutes)<input name="budget_minutes" type="number" min="0.1" max="240" step="0.1" required></label>
+        <label>Checkpoint (minutes)<input name="checkpoint_minutes" type="number" min="0.1" max="240" step="0.1" required></label>
+        <label class="wide">Task for the agent<textarea name="prompt" required></textarea></label>
+        <label class="wide">Verification command <span class="muted">(optional—exit 0 means proved)</span><input name="verification_command" placeholder="python3 -m unittest discover -s tests -v"></label>
+      </div>
+      <button class="primary" type="submit">Check and save task</button>
+      <div id="form-result" class="form-result" aria-live="polite"></div>
+    </form>
+  </details>
+  <details id="agent-control" class="new-task live-run"></details>
+  <section id="contract" class="contract"></section>
+  <section id="summary" class="summary"></section>
+  <div class="section-head"><h2>Run receipts</h2><div><span id="last-updated" class="muted"></span><button type="button" onclick="loadState(false)">Refresh runs</button></div></div>
+  <div id="runs"></div>
+  <footer>This page reads local BuildBrake receipts and checks for completed runs automatically.</footer>
+</main>
+<script>
+const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const duration = seconds => seconds < 60 ? `${seconds.toFixed(1)}s` : `${(seconds / 60).toFixed(1)}m`;
+async function evaluateRun(id, proved) {
+  const evidence = window.prompt('What evidence supports this decision?') ?? '';
+  const response = await fetch(`/api/receipts/${encodeURIComponent(id)}/evaluation`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({proved_success: proved, evidence})
+  });
+  if (!response.ok) { alert('Could not save evaluation.'); return; }
+  await loadState(false);
+}
+async function copyCommand(button) {
+  const command = button.closest('.command-box').querySelector('code').textContent;
+  await navigator.clipboard.writeText(command);
+  button.textContent = 'Copied';
+  setTimeout(() => button.textContent = 'Copy command', 1600);
+}
+function savedTaskResult(data) {
+  const verification = data.verification_command ? `<div class="muted">Automatic verification: ${esc(data.verification_command)}</div>` : '<div class="muted">Outcome will require human evaluation.</div>';
+  return `<span class="good">Task passed and was saved.</span>${data.mode ? `<div>${esc(data.mode)} mode · ${data.budget_minutes} minute budget</div>` : ''}${verification}<button class="primary" type="button" onclick="runAgent()">Run task</button><details class="terminal-alternative"><summary>Terminal alternative</summary><div class="command-box"><code>${esc(data.command)}</code><button type="button" onclick="copyCommand(this)">Copy command</button></div></details>`;
+}
+async function runAgent() {
+  const response = await fetch('/api/agent/start', {method:'POST'});
+  const data = await response.json();
+  if (!response.ok) { alert(data.message || 'Could not start agent.'); return; }
+  await loadState(false);
+}
+async function stopAgent() {
+  const response = await fetch('/api/agent/stop', {method:'POST'});
+  const data = await response.json();
+  if (!response.ok) { alert(data.message || 'Could not stop agent.'); return; }
+  await loadState(false);
+}
+let previousAgentStatus = null;
+function renderAgentRun(run) {
+  const control = document.querySelector('#agent-control');
+  const wasOpen = control.open;
+  const previousOutput = document.querySelector('#agent-control .live-output');
+  const previousScrollTop = previousOutput?.scrollTop || 0;
+  const wasAtBottom = !previousOutput || previousOutput.scrollHeight - previousOutput.clientHeight - previousScrollTop <= 2;
+  const running = run.status === 'running' || run.status === 'stopping';
+  const statusClass = run.status === 'completed' ? 'good' : ['failed','stopped'].includes(run.status) ? 'bad' : '';
+  const controls = running
+    ? `<button class="stop" type="button" onclick="stopAgent()">Stop agent</button>`
+    : `<button type="button" onclick="runAgent()">Run saved task</button>`;
+  const output = run.lines?.length ? `<div class="live-output">${run.lines.map(esc).join('<br>')}</div>` : '';
+  control.innerHTML = `<summary><span class="live-head"><span><strong>Agent run</strong><br><span class="${statusClass}">${esc(run.status)}</span> · ${duration(run.elapsed_seconds)}</span></span></summary><div>${controls}</div>${output}`;
+  control.open = previousAgentStatus === null
+    ? run.status !== 'completed'
+    : (running && !['running', 'stopping'].includes(previousAgentStatus)) || wasOpen;
+  previousAgentStatus = run.status;
+  const nextOutput = document.querySelector('#agent-control .live-output');
+  if (nextOutput) nextOutput.scrollTop = wasAtBottom ? nextOutput.scrollHeight : previousScrollTop;
+}
+document.querySelector('#quick-task-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const result = document.querySelector('#quick-result');
+  result.textContent = 'Creating a guarded task…';
+  const prompt = new FormData(event.currentTarget).get('prompt');
+  const response = await fetch('/api/quick-task', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({prompt})});
+  const data = await response.json();
+  if (!response.ok) {
+    result.innerHTML = `<span class="bad">Blocked before Codex starts.</span><pre>${esc((data.failures || [data.error]).join('\n'))}</pre>`;
+    return;
+  }
+  result.innerHTML = savedTaskResult(data);
+  await loadState(false);
+});
+document.querySelector('#task-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const form = new FormData(event.currentTarget);
+  const payload = Object.fromEntries(form.entries());
+  const result = document.querySelector('#form-result');
+  result.textContent = 'Checking task…';
+  const response = await fetch('/api/task', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+  const data = await response.json();
+  if (!response.ok) {
+    const reasons = data.failures?.map(reason => `• ${reason}`).join('\n') || data.error || 'Could not save task.';
+    const rewrite = data.rewrite_example
+      ? `<strong>Example rewrite</strong><pre>${esc(data.rewrite_example)}</pre>`
+      : '';
+    result.innerHTML = `<span class="bad">Blocked before Codex starts.</span><pre>${esc(reasons)}</pre>${rewrite}`;
+    return;
+  }
+  result.innerHTML = savedTaskResult(data);
+  await loadState(false);
+});
+async function loadState(populateForm = false) {
+  try {
+  const response = await fetch('/api/state', {cache: 'no-store'});
+  if (!response.ok) throw new Error(`server returned ${response.status}`);
+  const {contract: c, receipts, active_run} = await response.json();
+  renderAgentRun(active_run || {status:'idle',elapsed_seconds:0,lines:[]});
+  const form = document.querySelector('#task-form');
+  if (populateForm) {
+    for (const field of ['problem','user','current_workaround','success']) form.elements[field].value = c[field] || '';
+    form.elements.budget_minutes.value = c.budget_minutes;
+    form.elements.checkpoint_minutes.value = c.checkpoint_minutes;
+  }
+  document.querySelector('#contract').innerHTML = `
+    <div class="field"><strong>Problem</strong><span>${esc(c.problem)}</span></div>
+    <div class="field"><strong>Who has it</strong><span>${esc(c.user)}</span></div>
+    <div class="field"><strong>Current workaround</strong><span>${esc(c.current_workaround)}</span></div>
+    <div class="field"><strong>Limits</strong><span>${c.budget_minutes}m budget · ${c.checkpoint_minutes}m checkpoints</span></div>
+    <div class="field success"><strong>Success must look like</strong><span>${esc(c.success)}</span></div>`;
+  const total = receipts.reduce((sum, r) => sum + r.elapsed_seconds, 0);
+  const stopped = receipts.filter(r => r.stopping_reason !== 'completed').length;
+  const proved = receipts.filter(r => r.evaluation?.proved_success === true).length;
+  document.querySelector('#summary').innerHTML = `
+    <div class="metric"><b>${receipts.length}</b><span>guarded runs</span></div>
+    <div class="metric"><b>${duration(total)}</b><span>total runtime</span></div>
+    <div class="metric"><b>${proved}</b><span>outcomes proved</span></div>`;
+  const runsElement = document.querySelector('#runs');
+  const openFindings = new Set(
+    [...runsElement.querySelectorAll('.run details[open]')].map(details => details.closest('.run')?.dataset.receipt)
+  );
+  runsElement.className = 'runs';
+  runsElement.innerHTML = receipts.length ? receipts.map(r => {
+    const evaluation = r.evaluation?.proved_success;
+    const decision = evaluation === true ? '<span class="good">proved</span>' : evaluation === false ? '<span class="bad">not proved</span>' : '<span class="muted">not evaluated</span>';
+    const note = r.evaluation?.evidence ? `<br><span class="muted">${esc(r.evaluation.evidence)}</span>` : '';
+    const label = `${decision}${note}<br><button class="proved-button" onclick="evaluateRun('${esc(r.id)}', true)">Proved</button><button class="not-proved-button" onclick="evaluateRun('${esc(r.id)}', false)">Not proved</button>`;
+    const command = r.run_type === 'ai_agent' ? `${r.agent} agent: ${r.agent_prompt}` : r.command.join(' ');
+    const isAgent = r.run_type === 'ai_agent';
+    const type = isAgent ? 'AI agent' : 'command';
+    const tokenUsage = r.agent_events?.usage;
+    const totalTokens = tokenUsage?.input_tokens;
+    const cachedTokens = tokenUsage?.cached_input_tokens || 0;
+    const newTokens = totalTokens == null ? null : Math.max(0, totalTokens - cachedTokens);
+    const usage = totalTokens == null ? '—' : `${newTokens.toLocaleString()} new · ${cachedTokens.toLocaleString()} cached · ${totalTokens.toLocaleString()} total`;
+    const finding = r.agent_events?.final_message ? `<details><summary>Agent's final finding</summary><pre>${esc(r.agent_events.final_message)}</pre></details>` : '';
+    const efficiency = r.efficiency;
+    const efficiencyLabel = efficiency
+      ? `<span class="grade-${esc(efficiency.grade)}">${esc(efficiency.grade)} · ${esc(efficiency.label)} resource use</span><br><span class="muted">${efficiency.actual.new_tokens.toLocaleString()} / ${efficiency.budget.new_tokens.toLocaleString()} new-token budget</span>`
+      : '—';
+    return `<article class="run" data-receipt="${esc(r.id)}">
+      <div class="run-head"><span class="run-id">${esc(r.id)}</span><span class="tag ${isAgent ? 'good' : ''}">${type}</span></div>
+      <div class="run-task">${esc(command)}</div>
+      <div class="run-meta">
+        <div><strong>Runtime</strong>${duration(r.elapsed_seconds)}</div>
+        <div><strong>Stopped because</strong>${esc(r.stopping_reason.replaceAll('_',' '))}</div>
+        <div><strong>Usage</strong>${usage}</div>
+        <div><strong>Files changed</strong>${r.changed_files.length}${r.task_mode ? ` · ${esc(r.task_mode)} mode` : ''}</div>
+        <div><strong>${isAgent ? 'Codex thread' : 'Run type'}</strong>${isAgent ? esc(r.agent_events?.thread_id || '—') : 'local command'}</div>
+        <div><strong>Efficiency</strong>${efficiencyLabel}</div>
+      </div>${finding}<div class="decision"><strong>Outcome: </strong>${label}</div>
+    </article>`;
+  }).join('') : '<div class="empty">No guarded runs yet.</div>';
+  for (const receiptId of openFindings) {
+    const card = [...runsElement.querySelectorAll('.run')].find(run => run.dataset.receipt === receiptId);
+    if (card) card.querySelector('details')?.setAttribute('open', '');
+  }
+  document.querySelector('#last-updated').textContent = `Updated ${new Date().toLocaleTimeString()} · `;
+  } catch (error) {
+    document.querySelector('#last-updated').textContent = 'Update failed · ';
+    document.querySelector('#runs').textContent = `Could not load dashboard: ${error}`;
+  }
+}
+loadState(true);
+setInterval(() => {
+  const selection = window.getSelection();
+  const runs = document.querySelector('#runs');
+  if (selection && !selection.isCollapsed &&
+      (runs.contains(selection.anchorNode) || runs.contains(selection.focusNode))) return;
+  loadState(false);
+}, 5000);
+</script>
+</body>
+</html>

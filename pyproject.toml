@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "buildbrake"
+version = "0.1.0"
+description = "A local outcome contract and runtime guard for coding-agent commands"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.scripts]
+buildbrake = "buildbrake.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+buildbrake = ["static/*.html"]

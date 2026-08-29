@@ -1,0 +1,339 @@
+from __future__ import annotations
+
+import json
+import os
+import signal
+import subprocess
+import sys
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import urlparse
+
+from buildbrake.cli import CONTRACT_FILE, RECEIPTS_DIR, STATE_DIR, TASK_FILE, calculate_efficiency, parse_codex_events
+
+
+class AgentRunManager:
+    def __init__(self, root: Path):
+        self.root = root
+        self.lock = threading.Lock()
+        self.process: subprocess.Popen[str] | None = None
+        self.status = "idle"
+        self.started_at: float | None = None
+        self.finished_at: float | None = None
+        self.exit_code: int | None = None
+        self.lines: list[str] = []
+
+    def snapshot(self) -> dict[str, object]:
+        with self.lock:
+            elapsed = 0.0
+            if self.started_at is not None:
+                end = self.finished_at or time.time()
+                elapsed = max(0, end - self.started_at)
+            return {
+                "status": self.status, "elapsed_seconds": round(elapsed, 1),
+                "exit_code": self.exit_code, "lines": self.lines[-80:],
+            }
+
+    def start(self, command: list[str] | None = None) -> tuple[bool, str]:
+        with self.lock:
+            if self.process is not None and self.process.poll() is None:
+                return False, "an agent is already running"
+            task = self.root / STATE_DIR / TASK_FILE
+            if command is None and not task.is_file():
+                return False, "save a task before starting the agent"
+            if command is None:
+                command = [sys.executable, "-m", "buildbrake.cli", "-C", str(self.root), "agent", "--no-checkpoints"]
+            self.status = "running"
+            self.started_at = time.time()
+            self.finished_at = None
+            self.exit_code = None
+            self.lines = ["Starting guarded agent…"]
+            self.process = subprocess.Popen(
+                command, cwd=self.root, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                bufsize=1, start_new_session=True,
+            )
+            process = self.process
+        threading.Thread(target=self._watch, args=(process,), daemon=True).start()
+        return True, "started"
+
+    def _watch(self, process: subprocess.Popen[str]) -> None:
+        assert process.stdout is not None
+        for line in process.stdout:
+            cleaned = line.rstrip()
+            if cleaned:
+                with self.lock:
+                    self.lines.append(cleaned)
+                    self.lines = self.lines[-200:]
+        process.stdout.close()
+        exit_code = process.wait()
+        with self.lock:
+            self.exit_code = exit_code
+            self.finished_at = time.time()
+            if self.status == "stopping":
+                self.status = "stopped"
+            else:
+                self.status = "completed" if exit_code == 0 else "failed"
+
+    def stop(self) -> tuple[bool, str]:
+        with self.lock:
+            process = self.process
+            if process is None or process.poll() is not None:
+                return False, "no agent is running"
+            self.status = "stopping"
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            return False, "agent already stopped"
+        return True, "stopping"
+
+
+def dashboard_html() -> bytes:
+    path = Path(__file__).parent / "static" / "index.html"
+    return path.read_bytes()
+
+
+def json_bytes(value: object) -> bytes:
+    return json.dumps(value).encode("utf-8")
+
+
+def rewrite_task_example(contract: object) -> str:
+    return (
+        f'Update the dashboard task form for {contract.user} so the observable result is: '
+        f'"{contract.success}". Add or update an automated test that proves this result.'
+    )
+
+
+def blocked_task_response(contract: object, prompt: str) -> dict[str, object] | None:
+    from buildbrake.cli import preflight
+    failures = preflight(contract, prompt)
+    if not failures:
+        return None
+    return {
+        "decision": "BLOCK",
+        "failures": failures,
+        "rewrite_example": rewrite_task_example(contract),
+    }
+
+
+def make_handler(root: Path, run_manager: AgentRunManager):
+    class DashboardHandler(BaseHTTPRequestHandler):
+        def send_bytes(self, status: int, content_type: str, body: bytes) -> None:
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_GET(self) -> None:
+            path = urlparse(self.path).path
+            if path == "/":
+                self.send_bytes(200, "text/html; charset=utf-8", dashboard_html())
+                return
+            if path == "/api/state":
+                contract_file = root / STATE_DIR / CONTRACT_FILE
+                receipts_dir = root / STATE_DIR / RECEIPTS_DIR
+                contract = json.loads(contract_file.read_text())
+                receipts = []
+                if receipts_dir.exists():
+                    for receipt in sorted(receipts_dir.glob("*.json"), reverse=True):
+                        item = json.loads(receipt.read_text())
+                        log_path = Path(item.get("log", ""))
+                        if item.get("agent") == "codex" and log_path.is_file():
+                            item["agent_events"] = parse_codex_events(log_path)
+                            if item["agent_events"]["changed_files"]:
+                                item["changed_files"] = item["agent_events"]["changed_files"]
+                            item["efficiency"] = calculate_efficiency(item)
+                        receipts.append(item)
+                self.send_bytes(200, "application/json", json_bytes({
+                    "contract": contract, "receipts": receipts, "active_run": run_manager.snapshot(),
+                }))
+                return
+            self.send_bytes(404, "application/json", json_bytes({"error": "not found"}))
+
+        def do_POST(self) -> None:
+            path = urlparse(self.path).path
+            if path == "/api/quick-task":
+                self.save_quick_task()
+                return
+            if path == "/api/agent/start":
+                started, message = run_manager.start()
+                self.send_bytes(200 if started else 409, "application/json", json_bytes({"started": started, "message": message}))
+                return
+            if path == "/api/agent/stop":
+                stopped, message = run_manager.stop()
+                self.send_bytes(200 if stopped else 409, "application/json", json_bytes({"stopped": stopped, "message": message}))
+                return
+            if path == "/api/task":
+                self.save_task()
+                return
+            parts = path.strip("/").split("/")
+            if len(parts) != 4 or parts[:2] != ["api", "receipts"] or parts[3] != "evaluation":
+                self.send_bytes(404, "application/json", json_bytes({"error": "not found"}))
+                return
+            receipt_id = parts[2]
+            if not receipt_id or any(char not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_" for char in receipt_id):
+                self.send_bytes(400, "application/json", json_bytes({"error": "invalid receipt ID"}))
+                return
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+            except ValueError:
+                length = 0
+            if length <= 0 or length > 16_384:
+                self.send_bytes(400, "application/json", json_bytes({"error": "invalid request size"}))
+                return
+            try:
+                body = json.loads(self.rfile.read(length))
+            except json.JSONDecodeError:
+                self.send_bytes(400, "application/json", json_bytes({"error": "invalid JSON"}))
+                return
+            if not isinstance(body.get("proved_success"), bool):
+                self.send_bytes(400, "application/json", json_bytes({"error": "proved_success must be boolean"}))
+                return
+            evidence = body.get("evidence", "")
+            if not isinstance(evidence, str) or len(evidence) > 4_000:
+                self.send_bytes(400, "application/json", json_bytes({"error": "invalid evidence"}))
+                return
+            receipt_path = root / STATE_DIR / RECEIPTS_DIR / f"{receipt_id}.json"
+            if not receipt_path.is_file():
+                self.send_bytes(404, "application/json", json_bytes({"error": "receipt not found"}))
+                return
+            receipt = json.loads(receipt_path.read_text())
+            from buildbrake.cli import now
+            receipt["evaluation"] = {
+                "proved_success": body["proved_success"],
+                "evidence": evidence.strip(),
+                "evaluated_at": now(),
+            }
+            receipt_path.write_text(json.dumps(receipt, indent=2) + "\n")
+            self.send_bytes(200, "application/json", json_bytes({"evaluation": receipt["evaluation"]}))
+
+        def read_json_body(self) -> dict | None:
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+            except ValueError:
+                length = 0
+            if length <= 0 or length > 32_768:
+                return None
+            try:
+                value = json.loads(self.rfile.read(length))
+            except json.JSONDecodeError:
+                return None
+            return value if isinstance(value, dict) else None
+
+        def save_task(self) -> None:
+            body = self.read_json_body()
+            if body is None:
+                self.send_bytes(400, "application/json", json_bytes({"error": "invalid request"}))
+                return
+            text_fields = ("problem", "user", "current_workaround", "success", "prompt")
+            if any(not isinstance(body.get(field), str) or not body[field].strip() for field in text_fields):
+                self.send_bytes(400, "application/json", json_bytes({"error": "all task fields are required"}))
+                return
+            verification_command = body.get("verification_command", "")
+            if not isinstance(verification_command, str) or len(verification_command) > 2_000:
+                self.send_bytes(400, "application/json", json_bytes({"error": "invalid verification command"}))
+                return
+            if any(len(body[field]) > 4_000 for field in text_fields):
+                self.send_bytes(400, "application/json", json_bytes({"error": "task field is too long"}))
+                return
+            try:
+                budget = float(body.get("budget_minutes"))
+                checkpoint = float(body.get("checkpoint_minutes"))
+            except (TypeError, ValueError):
+                budget = checkpoint = 0
+            if not (0 < budget <= 240 and 0 < checkpoint <= budget):
+                self.send_bytes(400, "application/json", json_bytes({"error": "budget must be 0-240 minutes and checkpoint must not exceed it"}))
+                return
+            from buildbrake.cli import Contract, now
+            contract = Contract(
+                problem=body["problem"].strip(), user=body["user"].strip(),
+                current_workaround=body["current_workaround"].strip(), success=body["success"].strip(),
+                budget_minutes=budget, checkpoint_minutes=checkpoint, created_at=now(),
+            )
+            blocked = blocked_task_response(contract, body["prompt"])
+            if blocked:
+                self.send_bytes(422, "application/json", json_bytes(blocked))
+                return
+            folder = root / STATE_DIR
+            folder.mkdir(exist_ok=True)
+            from dataclasses import asdict
+            (folder / CONTRACT_FILE).write_text(json.dumps(asdict(contract), indent=2) + "\n")
+            (folder / TASK_FILE).write_text(json.dumps({
+                "prompt": body["prompt"].strip(),
+                "verification_command": verification_command.strip() or None,
+                "saved_at": now(),
+            }, indent=2) + "\n")
+            command = f'"{root / "bb"}" agent'
+            from buildbrake.cli import classify_task
+            self.send_bytes(200, "application/json", json_bytes({
+                "decision": "PASS", "command": command, "mode": classify_task(body["prompt"]),
+                "budget_minutes": budget, "verification_command": verification_command.strip() or None,
+            }))
+
+        def save_quick_task(self) -> None:
+            body = self.read_json_body()
+            prompt = body.get("prompt", "") if body else ""
+            if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 4_000:
+                self.send_bytes(400, "application/json", json_bytes({"error": "enter one concrete task"}))
+                return
+            from buildbrake.cli import Contract, classify_task, now, preflight, requires_human_review
+            prompt = prompt.strip()
+            mode = classify_task(prompt)
+            budget, checkpoint = (3.0, 1.0) if mode == "small" else (15.0, 5.0)
+            contract = Contract(
+                problem=f"The requested project change is not implemented: {prompt}",
+                user="Developer requesting the change",
+                current_workaround="Supervise the coding agent and verify the change manually",
+                success=f"The project implements this requested result: {prompt}",
+                budget_minutes=budget, checkpoint_minutes=checkpoint, created_at=now(),
+            )
+            failures = preflight(contract, prompt)
+            if failures:
+                self.send_bytes(422, "application/json", json_bytes({"decision": "BLOCK", "failures": failures}))
+                return
+            human_review = requires_human_review(prompt)
+            verification = None if human_review else detect_verification_command(root)
+            folder = root / STATE_DIR
+            folder.mkdir(exist_ok=True)
+            from dataclasses import asdict
+            (folder / CONTRACT_FILE).write_text(json.dumps(asdict(contract), indent=2) + "\n")
+            (folder / TASK_FILE).write_text(json.dumps({
+                "prompt": prompt, "verification_command": verification, "saved_at": now(), "created_with": "quick_task",
+            }, indent=2) + "\n")
+            command = f'"{root / "bb"}" agent'
+            self.send_bytes(200, "application/json", json_bytes({
+                "decision": "PASS", "command": command, "mode": mode,
+                "budget_minutes": budget, "verification_command": verification,
+                "success": contract.success, "human_review_required": human_review,
+            }))
+
+        def log_message(self, format: str, *args: object) -> None:
+            return
+
+    return DashboardHandler
+
+
+def make_server(root: Path, host: str, port: int) -> ThreadingHTTPServer:
+    manager = AgentRunManager(root)
+    server = ThreadingHTTPServer((host, port), make_handler(root, manager))
+    server.run_manager = manager  # type: ignore[attr-defined]
+    return server
+
+
+def detect_verification_command(root: Path) -> str | None:
+    if (root / "pyproject.toml").is_file() and (root / "tests").is_dir():
+        return "/usr/bin/env PYTHONPATH=src python3 -m unittest discover -s tests -v"
+    package = root / "package.json"
+    if package.is_file():
+        try:
+            scripts = json.loads(package.read_text()).get("scripts", {})
+            if scripts.get("test") and "no test specified" not in scripts["test"]:
+                return "npm test"
+        except (json.JSONDecodeError, TypeError):
+            pass
+    if (root / "pom.xml").is_file():
+        return "mvn test"
+    return None
