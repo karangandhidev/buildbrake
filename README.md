@@ -29,8 +29,11 @@ To install `buildbrake` as a command for use in other projects:
 cd "/Users/karan/Super Dev/BuildBrake"
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e .
+python -m pip install .
 ```
+
+Use `python -m pip install -e .` only when developing BuildBrake itself and your
+environment has a current pip/setuptools toolchain.
 
 Create an outcome contract in a project you want to guard:
 
