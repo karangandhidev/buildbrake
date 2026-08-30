@@ -61,7 +61,8 @@
     .decision .proved-button { background: #70e09b; border-color: #70e09b; color: #07150c; font-weight: 700; }
     .decision .not-proved-button { background: #ff7a70; border-color: #ff7a70; color: #1b0605; font-weight: 700; margin-left: 8px; }
     .good { color: #70e09b; } .bad { color: #ff7a70; } .muted { color: #858e9f; }
-    .grade-A, .grade-B { color: #70e09b; } .grade-C { color: #f4c56a; } .grade-D, .grade-F { color: #ff7a70; }
+    .resource-comparison { display: grid; gap: 7px; }
+    .resource-row { display: grid; grid-template-columns: 7rem 1fr; gap: 8px; }
     button { appearance: none; border: 1px solid #394354; background: #1a202c; color: #edf0f6; border-radius: 10px; padding: 9px 13px; cursor: pointer; margin: 4px 4px 0 0; font: inherit; transition: transform .18s, border-color .18s, filter .18s; }
     button:hover { border-color: #718096; filter: brightness(1.08); transform: translateY(-1px); }
     button:focus-visible, summary:focus-visible { outline: 2px solid #70e09b; outline-offset: 3px; }
@@ -134,7 +135,7 @@ async function copyCommand(button) {
 }
 function savedTaskResult(data) {
   const verification = data.verification_command ? `<div class="muted">Automatic verification: ${esc(data.verification_command)}</div>` : '<div class="muted">Outcome will require human evaluation.</div>';
-  return `<span class="good">Task passed and was saved.</span>${data.mode ? `<div>${esc(data.mode)} mode · ${data.budget_minutes} minute budget</div>` : ''}${verification}<button class="primary" type="button" onclick="runAgent()">Run task</button><details class="terminal-alternative"><summary>Terminal alternative</summary><div class="command-box"><code>${esc(data.command)}</code><button type="button" onclick="copyCommand(this)">Copy command</button></div></details>`;
+  return `<span class="good">Task passed and was saved.</span>${data.mode ? `<div>${esc(data.mode)} mode · ${data.budget_minutes} minute configured target</div>` : ''}${verification}<button class="primary" type="button" onclick="runAgent()">Run task</button><details class="terminal-alternative"><summary>Terminal alternative</summary><div class="command-box"><code>${esc(data.command)}</code><button type="button" onclick="copyCommand(this)">Copy command</button></div></details>`;
 }
 async function runAgent() {
   const response = await fetch('/api/agent/start', {method:'POST'});
@@ -233,7 +234,7 @@ async function loadState(populateForm = false) {
     <div class="field"><strong>Problem</strong><span>${esc(c.problem)}</span></div>
     <div class="field"><strong>Who has it</strong><span>${esc(c.user)}</span></div>
     <div class="field"><strong>Current workaround</strong><span>${esc(c.current_workaround)}</span></div>
-    <div class="field"><strong>Limits</strong><span>${c.budget_minutes}m budget · ${c.checkpoint_minutes}m checkpoints</span></div>
+    <div class="field"><strong>Limits</strong><span>${c.budget_minutes}m configured target · ${c.checkpoint_minutes}m checkpoints</span></div>
     <div class="field success"><strong>Success must look like</strong><span>${esc(c.success)}</span></div>`;
   const total = receipts.reduce((sum, r) => sum + r.elapsed_seconds, 0);
   const stopped = receipts.filter(r => r.stopping_reason !== 'completed').length;
@@ -260,22 +261,36 @@ async function loadState(populateForm = false) {
     const cachedTokens = tokenUsage?.cached_input_tokens || 0;
     const newTokens = totalTokens == null ? null : Math.max(0, totalTokens - cachedTokens);
     const usage = totalTokens == null ? '—' : `${newTokens.toLocaleString()} new · ${cachedTokens.toLocaleString()} cached · ${totalTokens.toLocaleString()} total`;
-    const finding = r.agent_events?.final_message ? `<details><summary>Agent's final finding</summary><pre>${esc(r.agent_events.final_message)}</pre></details>` : '';
+    const changedFiles = Array.isArray(r.changed_files) && r.changed_files.length
+      ? r.changed_files.map(path => esc(path)).join('<br>')
+      : 'No files changed';
+    const interpretation = r.interpretation
+      ? `<div class="run-interpretation ${r.interpretation.status === 'already_satisfied' ? 'good' : 'muted'}"><strong>${esc(r.interpretation.label)}</strong><br>${esc(r.interpretation.message)}</div>`
+      : '';
+    const findingTitle = r.interpretation ? "Agent's raw finding" : "Agent's final finding";
+    const finding = r.agent_events?.final_message ? `<details><summary>${findingTitle}</summary><pre>${esc(r.agent_events.final_message)}</pre></details>` : '';
     const efficiency = r.efficiency;
+    const resourceNames = {new_tokens: 'New tokens', commands: 'Commands', files: 'Files changed', runtime: 'Runtime'};
+    const resourceValue = (metric, value) => metric === 'runtime' ? duration(value) : value.toLocaleString();
     const efficiencyLabel = efficiency
-      ? `<span class="grade-${esc(efficiency.grade)}">${esc(efficiency.grade)} · ${esc(efficiency.label)} resource use</span><br><span class="muted">${efficiency.actual.new_tokens.toLocaleString()} / ${efficiency.budget.new_tokens.toLocaleString()} new-token budget</span>`
+      ? `<div class="resource-comparison">${Object.entries(efficiency.comparisons).map(([metric, comparison]) => {
+          const status = comparison.status === 'within_target'
+            ? '<span class="good">within target</span>'
+            : `<span class="bad">over target by ${comparison.percent_over.toLocaleString()}%</span>`;
+          return `<div class="resource-row"><span>${resourceNames[metric]}</span><span>${resourceValue(metric, comparison.actual)} / ${resourceValue(metric, comparison.configured_target)} configured target · ${status}</span></div>`;
+        }).join('')}</div>`
       : '—';
     return `<article class="run" data-receipt="${esc(r.id)}">
       <div class="run-head"><span class="run-id">${esc(r.id)}</span><span class="tag ${isAgent ? 'good' : ''}">${type}</span></div>
       <div class="run-task">${esc(command)}</div>
       <div class="run-meta">
+        <div><strong>Files changed</strong>${r.changed_files.length}${r.task_mode ? ` · ${esc(r.task_mode)} mode` :''}<br>${changedFiles}</div>
         <div><strong>Runtime</strong>${duration(r.elapsed_seconds)}</div>
-        <div><strong>Stopped because</strong>${esc(r.stopping_reason.replaceAll('_',' '))}</div>
-        <div><strong>Usage</strong>${usage}</div>
-        <div><strong>Files changed</strong>${r.changed_files.length}${r.task_mode ? ` · ${esc(r.task_mode)} mode` : ''}</div>
         <div><strong>${isAgent ? 'Codex thread' : 'Run type'}</strong>${isAgent ? esc(r.agent_events?.thread_id || '—') : 'local command'}</div>
-        <div><strong>Efficiency</strong>${efficiencyLabel}</div>
-      </div>${finding}<div class="decision"><strong>Outcome: </strong>${label}</div>
+        <div><strong>Usage</strong>${usage}</div>
+        <div class="wide"><strong>Resource comparison</strong>${efficiencyLabel}</div>
+        <div><strong>Stopped because</strong>${esc((r.stopping_reason || '—').replaceAll('_',' '))}</div>
+      </div>${interpretation}${finding}<div class="decision"><strong>Outcome: </strong>${label}</div>
     </article>`;
   }).join('') : '<div class="empty">No guarded runs yet.</div>';
   for (const receiptId of openFindings) {

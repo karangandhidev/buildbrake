@@ -98,6 +98,36 @@ def json_bytes(value: object) -> bytes:
     return json.dumps(value).encode("utf-8")
 
 
+def relative_changed_files(root: Path, changed_files: object) -> list[str]:
+    if not isinstance(changed_files, list):
+        return []
+    return [
+        os.path.relpath(path, root) if Path(path).is_absolute() else Path(path).as_posix()
+        for path in changed_files if isinstance(path, str) and path
+    ]
+
+
+def receipt_interpretation(receipt: dict[str, object]) -> dict[str, str] | None:
+    changed_files = receipt.get("changed_files")
+    if receipt.get("run_type") != "ai_agent" or receipt.get("stopping_reason") != "completed":
+        return None
+    if isinstance(changed_files, list) and changed_files:
+        return None
+    evaluation = receipt.get("evaluation") or {}
+    proved = evaluation.get("proved_success") if isinstance(evaluation, dict) else None
+    if proved is True:
+        return {
+            "status": "already_satisfied",
+            "label": "Already satisfied",
+            "message": "No files changed; this run verified behavior that was already present.",
+        }
+    return {
+        "status": "no_changes",
+        "label": "No changes made",
+        "message": "The agent changed no files. Review its finding before accepting the outcome.",
+    }
+
+
 def rewrite_task_example(contract: object) -> str:
     return (
         f'Update the dashboard task form for {contract.user} so the observable result is: '
@@ -146,6 +176,8 @@ def make_handler(root: Path, run_manager: AgentRunManager):
                             if item["agent_events"]["changed_files"]:
                                 item["changed_files"] = item["agent_events"]["changed_files"]
                             item["efficiency"] = calculate_efficiency(item)
+                        item["changed_files"] = relative_changed_files(root, item.get("changed_files"))
+                        item["interpretation"] = receipt_interpretation(item)
                         receipts.append(item)
                 self.send_bytes(200, "application/json", json_bytes({
                     "contract": contract, "receipts": receipts, "active_run": run_manager.snapshot(),

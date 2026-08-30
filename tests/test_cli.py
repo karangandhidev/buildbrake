@@ -374,7 +374,66 @@ class BuildBrakeTests(unittest.TestCase):
                 "commands_started": 2, "changed_files": ["/tmp/project/src/app.html"],
             },
         }
-        self.assertEqual(calculate_efficiency(receipt)["actual"]["files"], 1)
+        self.assertEqual(calculate_efficiency(receipt)["comparisons"]["files"]["actual"], 1)
+
+    def test_dashboard_shows_separate_resource_comparisons_and_outcome(self):
+        from buildbrake.dashboard import dashboard_html
+
+        html = dashboard_html().decode()
+        for label in ("New tokens", "Commands", "Files changed", "Runtime"):
+            self.assertIn(label, html)
+        self.assertIn("configured target", html)
+        self.assertIn("within target", html)
+        self.assertIn("over target by", html)
+        self.assertIn("<strong>Outcome: </strong>", html)
+        self.assertNotIn("new-token budget", html)
+        self.assertNotIn("grade-", html)
+
+    def test_dashboard_orders_receipt_metadata_for_review(self):
+        from buildbrake.dashboard import dashboard_html
+
+        html = dashboard_html().decode()
+        labels = [
+            '<strong>Files changed</strong>', '<strong>Runtime</strong>',
+            "<strong>${isAgent ? 'Codex thread' : 'Run type'}</strong>",
+            '<strong>Usage</strong>', '<strong>Resource comparison</strong>',
+            '<strong>Stopped because</strong>',
+        ]
+        positions = [html.index(label) for label in labels]
+        self.assertEqual(positions, sorted(positions))
+        self.assertIn("r.changed_files.map(path => esc(path)).join('<br>')", html)
+        self.assertIn(": '—';", html)
+
+    def test_changed_file_paths_are_relative_and_missing_files_are_empty(self):
+        from buildbrake.dashboard import relative_changed_files
+
+        root = Path("/tmp/project")
+        self.assertEqual(
+            relative_changed_files(root, ["/tmp/project/src/app.py", "tests/test_app.py"]),
+            ["src/app.py", "tests/test_app.py"],
+        )
+        self.assertEqual(relative_changed_files(root, []), [])
+        self.assertEqual(relative_changed_files(root, None), [])
+
+    def test_completed_proved_agent_with_no_changes_is_already_satisfied(self):
+        from buildbrake.dashboard import receipt_interpretation
+
+        interpretation = receipt_interpretation({
+            "run_type": "ai_agent",
+            "stopping_reason": "completed",
+            "changed_files": [],
+            "evaluation": {"proved_success": True},
+        })
+        self.assertEqual(interpretation["status"], "already_satisfied")
+        self.assertIn("already present", interpretation["message"])
+
+    def test_dashboard_distinguishes_measured_result_from_raw_agent_finding(self):
+        from buildbrake.dashboard import dashboard_html
+
+        html = dashboard_html().decode()
+        self.assertIn("No files changed", html)
+        self.assertIn("Agent's raw finding", html)
+        self.assertEqual(html.count("${esc(r.task_mode)} mode"), 1)
 
     def test_codex_events_are_rendered_as_readable_progress(self):
         from buildbrake.cli import format_codex_event
@@ -426,35 +485,38 @@ class BuildBrakeTests(unittest.TestCase):
         successful = {"agent_events": {"final_message": "Added button colors and verified the tests."}}
         self.assertFalse(agent_reported_failure(successful))
 
-    def test_efficiency_grades_correct_but_expensive_small_run_as_high(self):
+    def test_resource_comparisons_below_equal_and_above_each_target(self):
         from buildbrake.cli import calculate_efficiency
 
-        receipt = {
-            "agent_prompt": "Add 24px spacing between the receipts heading and first card",
-            "elapsed_seconds": 60.55,
-            "changed_files": ["index.html", "test_cli.py"],
-            "agent_events": {
-                "usage": {"input_tokens": 245_780, "cached_input_tokens": 217_088},
-                "commands_started": 9,
-                "changed_files": ["index.html", "test_cli.py"],
-            },
-        }
-        efficiency = calculate_efficiency(receipt)
-        self.assertEqual(efficiency["grade"], "C")
-        self.assertEqual(efficiency["label"], "high")
-        self.assertEqual(efficiency["actual"]["new_tokens"], 28_692)
+        targets = {"new_tokens": 20_000, "commands": 4, "files": 3, "runtime": 180}
+        for metric, target in targets.items():
+            for relation, actual, status, percent_over in (
+                ("below", target - 1, "within_target", 0),
+                ("equal", target, "within_target", 0),
+                ("above", target + 1, "over_target", round(100 / target, 1)),
+            ):
+                values = {"new_tokens": 0, "commands": 0, "files": 0, "runtime": 0}
+                values[metric] = actual
+                receipt = {
+                    "task_mode": "small", "elapsed_seconds": values["runtime"],
+                    "changed_files": [f"file-{index}" for index in range(int(values["files"]))],
+                    "agent_events": {
+                        "usage": {"input_tokens": int(values["new_tokens"]), "cached_input_tokens": 0},
+                        "commands_started": int(values["commands"]),
+                    },
+                }
+                with self.subTest(metric=metric, relation=relation):
+                    comparison = calculate_efficiency(receipt)["comparisons"][metric]
+                    self.assertEqual(comparison["status"], status)
+                    self.assertEqual(comparison["percent_over"], percent_over)
+                    self.assertEqual(comparison["configured_target"], target)
 
-    def test_efficiency_grades_bounded_small_run_as_efficient(self):
+    def test_resource_comparison_has_no_combined_letter_grade(self):
         from buildbrake.cli import calculate_efficiency
 
-        receipt = {
-            "task_mode": "small", "elapsed_seconds": 30, "changed_files": ["index.html"],
-            "agent_events": {
-                "usage": {"input_tokens": 55_000, "cached_input_tokens": 50_000},
-                "commands_started": 3, "changed_files": ["index.html"],
-            },
-        }
-        self.assertEqual(calculate_efficiency(receipt)["grade"], "A")
+        comparison = calculate_efficiency({"task_mode": "small", "agent_events": {}})
+        self.assertNotIn("grade", comparison)
+        self.assertNotIn("score", comparison)
 
     def test_checkpoint_cannot_outlive_budget(self):
         from buildbrake.cli import Contract, checkpoint

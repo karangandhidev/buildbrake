@@ -102,7 +102,7 @@ Narrow tasks automatically run in **small mode**, aiming for four agent shell co
 
 If an agent explicitly reports that it could not reach the target or changed no files, BuildBrake automatically marks the outcome not proved instead of asking the user to evaluate it.
 
-AI receipts also receive a separate efficiency grade. The grade is a transparent local heuristic—not an OpenAI score—and compares new input tokens, commands, files, and runtime against the selected task mode. Correctness and efficiency remain independent: a receipt can be proved while receiving a poor efficiency grade.
+AI receipts show new input tokens, commands, files changed, and runtime separately against the configured targets for the selected task mode. Each resource is marked within target or shows its percentage over target. Outcome proof remains an independent status.
 
 ```bash
 ./bb agent

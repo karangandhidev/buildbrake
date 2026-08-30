@@ -466,7 +466,7 @@ def agent_reported_failure(receipt: dict[str, object]) -> bool:
     return any(phrase in message for phrase in FAILURE_PHRASES)
 
 
-EFFICIENCY_BUDGETS = {
+RESOURCE_TARGETS = {
     "small": {"new_tokens": 20_000, "commands": 4, "files": 3, "seconds": 180},
     "standard": {"new_tokens": 50_000, "commands": 12, "files": 10, "seconds": 900},
 }
@@ -481,36 +481,29 @@ def calculate_efficiency(receipt: dict[str, object]) -> dict[str, object]:
     cached_tokens = int(usage.get("cached_input_tokens") or 0)
     new_tokens = max(0, total_tokens - cached_tokens)
     mode = str(receipt.get("task_mode") or classify_task(str(receipt.get("agent_prompt") or "")))
-    if mode not in EFFICIENCY_BUDGETS:
+    if mode not in RESOURCE_TARGETS:
         mode = "standard"
-    budget = EFFICIENCY_BUDGETS[mode]
+    configured_targets = RESOURCE_TARGETS[mode]
     event_files = events.get("changed_files")
     files = len(set(event_files if event_files is not None else (receipt.get("changed_files") or [])))
     commands = int(events.get("commands_started") or 0)
     seconds = float(receipt.get("elapsed_seconds") or 0)
-    ratios = {
-        "new_tokens": new_tokens / budget["new_tokens"],
-        "commands": commands / budget["commands"],
-        "files": files / budget["files"],
-        "runtime": seconds / budget["seconds"],
-    }
-    score = max(ratios.values())
-    if score <= 1:
-        grade, label = "A", "efficient"
-    elif score <= 1.5:
-        grade, label = "B", "reasonable"
-    elif score <= 2.5:
-        grade, label = "C", "high"
-    elif score <= 4:
-        grade, label = "D", "poor"
-    else:
-        grade, label = "F", "wasteful"
+    actual = {"new_tokens": new_tokens, "commands": commands, "files": files, "runtime": round(seconds, 2)}
+    comparisons = {}
+    for metric, value in actual.items():
+        target_key = "seconds" if metric == "runtime" else metric
+        target = configured_targets[target_key]
+        percent_over = max(0, (value - target) / target * 100)
+        comparisons[metric] = {
+            "actual": value,
+            "configured_target": target,
+            "status": "within_target" if value <= target else "over_target",
+            "percent_over": round(percent_over, 1),
+        }
     return {
-        "grade": grade, "label": label, "mode": mode, "score": round(score, 2),
-        "actual": {"new_tokens": new_tokens, "commands": commands, "files": files, "seconds": round(seconds, 2)},
-        "budget": budget,
-        "ratios": {key: round(value, 2) for key, value in ratios.items()},
-        "method": "local_heuristic_v1",
+        "mode": mode,
+        "comparisons": comparisons,
+        "method": "configured_target_comparison_v1",
     }
 
 
@@ -729,7 +722,7 @@ def list_receipts(args: argparse.Namespace) -> int:
     if not items:
         print("No runs recorded.")
         return 0
-    print("ID                       TYPE      RESULT                       TIME    PROVED  EFF")
+    print("ID                       TYPE      RESULT                       TIME    PROVED")
     for path in items:
         item = json.loads(path.read_text())
         log_path = Path(item.get("log", ""))
@@ -737,12 +730,9 @@ def list_receipts(args: argparse.Namespace) -> int:
             item["agent_events"] = parse_codex_events(log_path)
         proved = item.get("evaluation", {}).get("proved_success", "-")
         run_type = item.get("agent", "command")
-        efficiency = "-"
-        if item.get("run_type") == "ai_agent":
-            efficiency = calculate_efficiency(item)["grade"]
         print(
             f"{item['id']:<24} {run_type:<9} {item['stopping_reason']:<28} "
-            f"{item['elapsed_seconds']:>6.1f}s  {str(proved).lower():<6}  {efficiency}"
+            f"{item['elapsed_seconds']:>6.1f}s  {str(proved).lower():<6}"
         )
     return 0
 
