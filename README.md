@@ -26,14 +26,14 @@ That opens the real receipt created while BuildBrake tested itself.
 To install `buildbrake` as a command for use in other projects:
 
 ```bash
-cd "/Users/karan/Super Dev/BuildBrake"
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install .
+git clone https://github.com/karangandhidev/buildbrake.git
+cd buildbrake
+./install.sh
 ```
 
-Use `python -m pip install -e .` only when developing BuildBrake itself and your
-environment has a current pip/setuptools toolchain.
+The installer creates an isolated environment under your user account and makes
+the `buildbrake` command available without requiring virtual-environment
+activation. The repository is currently private, so GitHub access is required.
 
 Open BuildBrake directly in a project you want to guard:
 
