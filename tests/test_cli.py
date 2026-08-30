@@ -407,16 +407,20 @@ class BuildBrakeTests(unittest.TestCase):
         from buildbrake.dashboard import dashboard_html
 
         html = dashboard_html().decode()
-        labels = [
-            '<strong>Files changed</strong>', '<strong>Runtime</strong>',
-            "<strong>${isAgent ? 'Codex thread' : 'Run type'}</strong>",
-            '<strong>Usage</strong>', '<strong>Resource comparison</strong>',
-            '<strong>Stopped because</strong>',
-        ]
-        positions = [html.index(label) for label in labels]
-        self.assertEqual(positions, sorted(positions))
+        self.assertIn('<div class="run-layout">', html)
+        self.assertIn('<div class="run-primary">', html)
+        self.assertIn('<aside class="run-resources"><div><strong>Usage</strong>', html)
+        self.assertIn('<div><strong>Resource comparison</strong>${efficiencyLabel}</div></aside>', html)
+        self.assertLess(html.index('<strong>Files changed</strong>'), html.index('<strong>Stopped because</strong>'))
         self.assertIn("r.changed_files.map(path => esc(path)).join('<br>')", html)
         self.assertIn(": '—';", html)
+
+    def test_receipt_layout_collapses_to_one_column_on_narrow_screens(self):
+        from buildbrake.dashboard import dashboard_html
+
+        html = dashboard_html().decode()
+        self.assertIn("@media (max-width: 820px) { .run-layout { grid-template-columns: 1fr; }", html)
+        self.assertIn(".run-resources { border-left: 0; border-top:", html)
 
     def test_changed_file_paths_are_relative_and_missing_files_are_empty(self):
         from buildbrake.dashboard import relative_changed_files
