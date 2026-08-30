@@ -411,7 +411,14 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertIn('<div class="run-primary">', html)
         self.assertIn('<aside class="run-resources"><div><strong>Usage</strong>', html)
         self.assertIn('<div><strong>Resource comparison</strong>${efficiencyLabel}</div></aside>', html)
-        self.assertLess(html.index('<strong>Files changed</strong>'), html.index('<strong>Stopped because</strong>'))
+        primary = html[html.index('<div class="run-primary-meta">'):html.index('</div>${interpretation}')]
+        labels = [
+            "<strong>${isAgent ? 'Codex thread' : 'Run type'}</strong>",
+            '<strong>Runtime</strong>', '<strong>Files changed</strong>',
+            '<strong>Stopped because</strong>',
+        ]
+        positions = [primary.index(label) for label in labels]
+        self.assertEqual(positions, sorted(positions))
         self.assertIn("r.changed_files.map(path => esc(path)).join('<br>')", html)
         self.assertIn(": '—';", html)
 

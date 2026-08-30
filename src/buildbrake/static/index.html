@@ -58,7 +58,6 @@
     .run-task { font-size: 1rem; line-height: 1.55; margin-bottom: 18px; }
     .run-layout { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(320px, .95fr); gap: 28px; align-items: start; }
     .run-primary-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 14px; }
-    .run-primary-meta .files { grid-column: 1 / -1; }
     .run-primary-meta strong, .run-resources strong { display: block; color: #778091; font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 5px; }
     .run-primary details { max-width: none; }
     .run-resources { min-width: 0; border-left: 1px solid #252a33; padding-left: 28px; }
@@ -81,7 +80,7 @@
     .section-head h2 { margin: 0; }
     footer { margin-top: 48px; padding-top: 22px; border-top: 1px solid rgba(255,255,255,.06); color: #687386; font-size: .85rem; }
     @media (max-width: 820px) { .run-layout { grid-template-columns: 1fr; } .run-resources { border-left: 0; border-top: 1px solid #252a33; padding: 22px 0 0; } }
-    @media (max-width: 680px) { main { padding: 34px 16px 56px; } .contract, .summary, .run-primary-meta, .form-grid { grid-template-columns: 1fr; } .run-primary-meta .files { grid-column: auto; } .wide { grid-column: auto; } header, .run-head { align-items: flex-start; flex-direction: column; } .new-task, .contract { padding: 22px; border-radius: 18px; } }
+    @media (max-width: 680px) { main { padding: 34px 16px 56px; } .contract, .summary, .run-primary-meta, .form-grid { grid-template-columns: 1fr; } .wide { grid-column: auto; } header, .run-head { align-items: flex-start; flex-direction: column; } .new-task, .contract { padding: 22px; border-radius: 18px; } }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
   </style>
 </head>
@@ -305,9 +304,9 @@ async function loadState(populateForm = false) {
       <div class="run-layout">
         <div class="run-primary">
           <div class="run-primary-meta">
-            <div class="files"><strong>Files changed</strong>${r.changed_files.length}${r.task_mode ? ` · ${esc(r.task_mode)} mode` :''}<br>${changedFiles}</div>
-            <div><strong>Runtime</strong>${duration(r.elapsed_seconds)}</div>
             <div><strong>${isAgent ? 'Codex thread' : 'Run type'}</strong>${isAgent ? esc(r.agent_events?.thread_id || '—') : 'local command'}</div>
+            <div><strong>Runtime</strong>${duration(r.elapsed_seconds)}</div>
+            <div><strong>Files changed</strong>${r.changed_files.length}${r.task_mode ? ` · ${esc(r.task_mode)} mode` :''}<br>${changedFiles}</div>
             <div><strong>Stopped because</strong>${esc((r.stopping_reason || '—').replaceAll('_',' '))}</div>
           </div>${interpretation}${finding}<div class="decision"><strong>Outcome: </strong>${label}</div>
         </div>
