@@ -48,6 +48,20 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertIn("nextOutput.scrollHeight : previousScrollTop", html)
         self.assertIn(".terminal-alternative { max-width: none; width: 100%; }", html)
 
+    def test_dashboard_explains_when_backend_restart_is_required(self):
+        from buildbrake.dashboard import backend_source_fingerprint, dashboard_html
+
+        with tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / "source.py"
+            source.write_text("before")
+            before = backend_source_fingerprint([source])
+            source.write_text("after")
+            self.assertNotEqual(before, backend_source_fingerprint([source]))
+        html = dashboard_html().decode()
+        self.assertIn("Dashboard restart required", html)
+        self.assertIn("./bb serve", html)
+        self.assertIn("showRestartNotice(run.restart_required === true)", html)
+
     def test_agent_run_manager_streams_and_completes(self):
         from buildbrake.dashboard import AgentRunManager
 
@@ -464,6 +478,24 @@ class BuildBrakeTests(unittest.TestCase):
         from buildbrake.cli import classify_task, requires_human_review
 
         self.assertEqual(classify_task("Add 24px spacing between the receipts heading and first card"), "small")
+        relative_path = (
+            "display only relative path instead of entire path of the files changed. "
+            "display relative path upto the project it is being run on"
+        )
+        self.assertEqual(classify_task(relative_path), "small")
+        for narrow_scope in (
+            "Validate the entire string before saving",
+            "Make the entire button clickable",
+        ):
+            self.assertEqual(classify_task(narrow_scope), "small")
+        for broad_scope in (
+            "Redesign the entire project",
+            "Update the entire application",
+            "Refactor the entire codebase",
+            "Modernize the entire repository",
+            "Complete redesign of the dashboard",
+        ):
+            self.assertEqual(classify_task(broad_scope), "standard")
         self.assertEqual(classify_task("Refactor the entire dashboard architecture and migrate every component safely"), "standard")
         redesign = "Redo the UI of BuildBrake to look more appealing to users"
         self.assertEqual(classify_task(redesign), "standard")

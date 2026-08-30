@@ -40,6 +40,8 @@
     .live-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
     .live-output { max-height: 320px; overflow: auto; background: #080b0f; border-radius: 10px; padding: 14px; margin-top: 14px; font-family: ui-monospace, SFMono-Regular, monospace; font-size: .82rem; line-height: 1.5; }
     .stop { border-color: #7d3939; color: #ff8a82; }
+    .restart-notice { border: 1px solid rgba(244,197,106,.45); background: rgba(244,197,106,.1); color: #f7d58e; border-radius: 14px; padding: 16px 18px; margin-bottom: 20px; line-height: 1.5; }
+    .restart-notice code { display: inline-block; margin: 8px 8px 0 0; padding: 7px 10px; border-radius: 8px; background: #090c10; color: #f4f6fb; user-select: all; }
     .field strong { display: block; color: #838c9d; font-size: .75rem; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 8px; }
     .field span { font-size: 1.05rem; line-height: 1.5; }
     .success { grid-column: 1 / -1; border-left: 3px solid #70e09b; padding-left: 18px; }
@@ -80,6 +82,7 @@
 <body>
 <main>
   <header><div><h1>Build<span class="mark">Brake</span></h1><p class="brand-copy">Ship with proof, not guesswork.</p></div><div class="pill">Local &amp; private</div></header>
+  <div id="restart-notice" class="restart-notice" hidden><strong>Dashboard restart required</strong><br>BuildBrake’s backend changed. Stop the current server with Ctrl+C, then run:<br><code>./bb serve</code><button type="button" onclick="copyRestartCommand(this)">Copy command</button></div>
   <section class="new-task quick-task">
     <h2>What should the agent do?</h2>
     <form id="quick-task-form">
@@ -118,6 +121,14 @@ const duration = seconds => seconds < 60 ? `${seconds.toFixed(1)}s` : `${(second
 const LIVE_REFRESH_MS = 2000;
 const IDLE_REFRESH_MS = 30000;
 let refreshTimer;
+function showRestartNotice(required) {
+  document.querySelector('#restart-notice').hidden = !required;
+}
+async function copyRestartCommand(button) {
+  await navigator.clipboard.writeText('./bb serve');
+  button.textContent = 'Copied';
+  setTimeout(() => button.textContent = 'Copy command', 1600);
+}
 async function evaluateRun(id, proved) {
   const evidence = window.prompt('What evidence supports this decision?') ?? '';
   const response = await fetch(`/api/receipts/${encodeURIComponent(id)}/evaluation`, {
@@ -174,6 +185,7 @@ async function loadAgentStatus() {
     const response = await fetch('/api/agent/status', {cache: 'no-store'});
     if (!response.ok) throw new Error(`server returned ${response.status}`);
     const run = await response.json();
+    showRestartNotice(run.restart_required === true);
     renderAgentRun(run);
     if (!agentIsActive(run)) {
       await loadState(false); // Refresh receipts once immediately when the run finishes.
@@ -221,7 +233,8 @@ async function loadState(populateForm = false) {
   try {
   const response = await fetch('/api/state', {cache: 'no-store'});
   if (!response.ok) throw new Error(`server returned ${response.status}`);
-  const {contract: c, receipts, active_run} = await response.json();
+  const {contract: c, receipts, active_run, restart_required} = await response.json();
+  showRestartNotice(restart_required === true);
   const run = active_run || {status:'idle',elapsed_seconds:0,lines:[]};
   renderAgentRun(run);
   const form = document.querySelector('#task-form');

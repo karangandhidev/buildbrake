@@ -429,9 +429,13 @@ VAGUE_PROMPTS = (
     "build the app", "fix the project", "finish the project",
 )
 BROAD_TASK_WORDS = {
-    "architecture", "entire", "migrate", "migration", "overhaul", "redo", "redesign",
+    "architecture", "migrate", "migration", "overhaul", "redo", "redesign",
     "refactor", "restyle", "revamp", "rewrite",
 }
+BROAD_TASK_PHRASES = (
+    "complete redesign", "entire application", "entire codebase", "entire project",
+    "entire repository",
+)
 SUBJECTIVE_OUTCOME_WORDS = {
     "appealing", "attractive", "beautiful", "cleaner", "easier", "friendly", "intuitive",
     "modern", "polished", "prettier", "professional", "usable",
@@ -440,7 +444,11 @@ SUBJECTIVE_OUTCOME_WORDS = {
 
 def classify_task(prompt: str) -> str:
     words = meaningful_words(prompt)
-    if len(prompt.split()) <= 35 and not (words & BROAD_TASK_WORDS):
+    normalized = " ".join(prompt.lower().split())
+    broad_scope = bool(words & BROAD_TASK_WORDS) or any(
+        phrase in normalized for phrase in BROAD_TASK_PHRASES
+    )
+    if len(prompt.split()) <= 35 and not broad_scope:
         return "small"
     return "standard"
 

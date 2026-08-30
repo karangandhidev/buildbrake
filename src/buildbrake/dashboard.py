@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import signal
@@ -98,6 +99,18 @@ def json_bytes(value: object) -> bytes:
     return json.dumps(value).encode("utf-8")
 
 
+def backend_source_fingerprint(paths: list[Path] | None = None) -> str:
+    source_paths = paths or [Path(__file__), Path(__file__).with_name("cli.py")]
+    digest = hashlib.sha256()
+    for path in source_paths:
+        digest.update(str(path).encode())
+        try:
+            digest.update(path.read_bytes())
+        except OSError:
+            digest.update(b"missing")
+    return digest.hexdigest()
+
+
 def relative_changed_files(root: Path, changed_files: object) -> list[str]:
     if not isinstance(changed_files, list):
         return []
@@ -147,7 +160,7 @@ def blocked_task_response(contract: object, prompt: str) -> dict[str, object] | 
     }
 
 
-def make_handler(root: Path, run_manager: AgentRunManager):
+def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: str):
     class DashboardHandler(BaseHTTPRequestHandler):
         def send_bytes(self, status: int, content_type: str, body: bytes) -> None:
             self.send_response(status)
@@ -181,10 +194,13 @@ def make_handler(root: Path, run_manager: AgentRunManager):
                         receipts.append(item)
                 self.send_bytes(200, "application/json", json_bytes({
                     "contract": contract, "receipts": receipts, "active_run": run_manager.snapshot(),
+                    "restart_required": backend_source_fingerprint() != startup_fingerprint,
                 }))
                 return
             if path == "/api/agent/status":
-                self.send_bytes(200, "application/json", json_bytes(run_manager.snapshot()))
+                status = run_manager.snapshot()
+                status["restart_required"] = backend_source_fingerprint() != startup_fingerprint
+                self.send_bytes(200, "application/json", json_bytes(status))
                 return
             self.send_bytes(404, "application/json", json_bytes({"error": "not found"}))
 
@@ -353,7 +369,8 @@ def make_handler(root: Path, run_manager: AgentRunManager):
 
 def make_server(root: Path, host: str, port: int) -> ThreadingHTTPServer:
     manager = AgentRunManager(root)
-    server = ThreadingHTTPServer((host, port), make_handler(root, manager))
+    startup_fingerprint = backend_source_fingerprint()
+    server = ThreadingHTTPServer((host, port), make_handler(root, manager, startup_fingerprint))
     server.run_manager = manager  # type: ignore[attr-defined]
     return server
 
