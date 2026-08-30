@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shlex
 import signal
 import subprocess
 import sys
@@ -139,6 +140,10 @@ def receipt_interpretation(receipt: dict[str, object]) -> dict[str, str] | None:
         "label": "No changes made",
         "message": "The agent changed no files. Review its finding before accepting the outcome.",
     }
+
+
+def dashboard_agent_command(root: Path) -> str:
+    return shlex.join([sys.executable, "-m", "buildbrake.cli", "-C", str(root), "agent"])
 
 
 def rewrite_task_example(contract: object) -> str:
@@ -317,7 +322,7 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
                 "verification_command": verification_command.strip() or None,
                 "saved_at": now(),
             }, indent=2) + "\n")
-            command = f'"{root / "bb"}" agent'
+            command = dashboard_agent_command(root)
             from buildbrake.cli import classify_task
             self.send_bytes(200, "application/json", json_bytes({
                 "decision": "PASS", "command": command, "mode": classify_task(body["prompt"]),
@@ -354,7 +359,7 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
             (folder / TASK_FILE).write_text(json.dumps({
                 "prompt": prompt, "verification_command": verification, "saved_at": now(), "created_with": "quick_task",
             }, indent=2) + "\n")
-            command = f'"{root / "bb"}" agent'
+            command = dashboard_agent_command(root)
             self.send_bytes(200, "application/json", json_bytes({
                 "decision": "PASS", "command": command, "mode": mode,
                 "budget_minutes": budget, "verification_command": verification,

@@ -35,12 +35,17 @@ python -m pip install .
 Use `python -m pip install -e .` only when developing BuildBrake itself and your
 environment has a current pip/setuptools toolchain.
 
-Create an outcome contract in a project you want to guard:
+Open BuildBrake directly in a project you want to guard:
 
 ```bash
 cd /path/to/your/project
-buildbrake init
+buildbrake serve
 ```
+
+On first launch, BuildBrake creates its local state automatically and opens the
+dashboard. Enter one concrete task under **What should the agent do?** and click
+**Check and save**. Use `buildbrake init` only when you want to define the full
+outcome contract from the terminal.
 
 Then run a command through BuildBrake:
 

@@ -51,6 +51,30 @@ def task_path(root: Path) -> Path:
     return state_path(root) / TASK_FILE
 
 
+def save_contract(root: Path, contract: Contract) -> None:
+    folder = state_path(root)
+    folder.mkdir(exist_ok=True)
+    contract_path(root).write_text(json.dumps(asdict(contract), indent=2) + "\n")
+    (folder / ".gitignore").write_text("receipts/*.log\n")
+
+
+def ensure_contract(root: Path) -> tuple[Contract, bool]:
+    try:
+        return load_contract(root), False
+    except FileNotFoundError:
+        contract = Contract(
+            problem="No guarded task has been defined yet",
+            user="Developer using this project",
+            current_workaround="Run coding agents directly without a recorded outcome",
+            success="A saved task defines a concrete observable result and completes within its configured limits",
+            budget_minutes=15,
+            checkpoint_minutes=5,
+            created_at=now(),
+        )
+        save_contract(root, contract)
+        return contract, True
+
+
 def ask(label: str, supplied: str | None) -> str:
     value = supplied if supplied is not None else input(f"{label}: ").strip()
     if not value.strip():
@@ -77,10 +101,7 @@ def init_contract(args: argparse.Namespace) -> int:
     if contract.budget_minutes <= 0 or contract.checkpoint_minutes <= 0:
         print("Budget and checkpoint must be greater than zero.", file=sys.stderr)
         return 2
-    folder = state_path(root)
-    folder.mkdir(exist_ok=True)
-    contract_path(root).write_text(json.dumps(asdict(contract), indent=2) + "\n")
-    (folder / ".gitignore").write_text("receipts/*.log\n")
+    save_contract(root, contract)
     print(f"Outcome contract created at {contract_path(root)}")
     print(f"Success means: {contract.success}")
     return 0
@@ -790,10 +811,12 @@ def serve_dashboard(args: argparse.Namespace) -> int:
 
     root = Path(args.directory).resolve()
     try:
-        load_contract(root)
-    except (FileNotFoundError, TypeError, json.JSONDecodeError) as exc:
+        _, initialized = ensure_contract(root)
+    except (TypeError, json.JSONDecodeError) as exc:
         print(str(exc), file=sys.stderr)
         return 2
+    if initialized:
+        print(f"Initialized BuildBrake for {root}")
     server = make_server(root, args.host, args.port)
     url = f"http://{args.host}:{server.server_port}"
     print(f"BuildBrake dashboard: {url}")

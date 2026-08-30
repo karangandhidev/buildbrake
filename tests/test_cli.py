@@ -114,6 +114,28 @@ class BuildBrakeTests(unittest.TestCase):
             status = self.run_cli(folder, "status")
             self.assertIn("Agents overbuild", status.stdout)
 
+    def test_first_dashboard_launch_creates_safe_default_contract(self):
+        from buildbrake.cli import ensure_contract
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            contract, initialized = ensure_contract(root)
+            self.assertTrue(initialized)
+            self.assertEqual(contract.budget_minutes, 15)
+            self.assertTrue((root / ".buildbrake/outcome.json").is_file())
+            loaded, initialized_again = ensure_contract(root)
+            self.assertFalse(initialized_again)
+            self.assertEqual(loaded, contract)
+
+    def test_dashboard_terminal_command_works_without_project_launcher(self):
+        from buildbrake.dashboard import dashboard_agent_command
+
+        command = dashboard_agent_command(Path("/tmp/project with spaces"))
+        self.assertIn(sys.executable, command)
+        self.assertIn("-m buildbrake.cli", command)
+        self.assertIn("'/tmp/project with spaces'", command)
+        self.assertNotIn("/bb agent", command)
+
     def test_run_creates_receipt(self):
         with tempfile.TemporaryDirectory() as folder:
             self.run_cli(
@@ -245,7 +267,8 @@ class BuildBrakeTests(unittest.TestCase):
                 with urllib.request.urlopen(request) as response:
                     data = json.load(response)
                 self.assertEqual(data["decision"], "PASS")
-                self.assertIn(str(Path(folder) / "bb"), data["command"])
+                self.assertIn("-m buildbrake.cli", data["command"])
+                self.assertIn(f"-C {folder}", data["command"])
                 saved = json.loads((Path(folder) / ".buildbrake/task.json").read_text())
                 self.assertEqual(saved["prompt"], payload["prompt"])
                 self.assertEqual(saved["verification_command"], payload["verification_command"])
