@@ -472,6 +472,15 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertNotIn("new-token budget", html)
         self.assertNotIn("grade-", html)
 
+    def test_dashboard_reports_saved_context_and_observed_token_comparison(self):
+        from buildbrake.dashboard import dashboard_html
+
+        html = dashboard_html().decode()
+        self.assertIn("codex_context_saved", html)
+        self.assertIn("saved project context ready", html)
+        self.assertIn("fresh avg →", html)
+        self.assertIn("reused avg new tokens", html)
+
     def test_dashboard_orders_receipt_metadata_for_review(self):
         from buildbrake.dashboard import dashboard_html
 

@@ -13,7 +13,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
-from buildbrake.cli import CONTRACT_FILE, RECEIPTS_DIR, STATE_DIR, TASK_FILE, calculate_efficiency, parse_codex_events
+from buildbrake.cli import (
+    CONTRACT_FILE, RECEIPTS_DIR, STATE_DIR, TASK_FILE, calculate_efficiency,
+    load_codex_thread, parse_codex_events,
+)
 
 
 class AgentRunManager:
@@ -201,6 +204,7 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
                         receipts.append(item)
                 self.send_bytes(200, "application/json", json_bytes({
                     "contract": contract, "receipts": receipts, "active_run": run_manager.snapshot(),
+                    "codex_context_saved": load_codex_thread(root) is not None,
                     "restart_required": backend_source_fingerprint() != startup_fingerprint,
                 }))
                 return
