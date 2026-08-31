@@ -473,6 +473,12 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertIn("r.changed_files.map(path => esc(path)).join('<br>')", html)
         self.assertIn(": '—';", html)
 
+    def test_dashboard_labels_codex_context_as_fresh_or_reused(self):
+        from buildbrake.dashboard import dashboard_html
+
+        html = dashboard_html().decode()
+        self.assertIn("r.thread_reused ? 'reused' : 'fresh'", html)
+
     def test_receipt_layout_collapses_to_one_column_on_narrow_screens(self):
         from buildbrake.dashboard import dashboard_html
 
@@ -635,6 +641,37 @@ class BuildBrakeTests(unittest.TestCase):
             self.skipTest("ChatGPT bundled Codex is not installed")
         with patch("buildbrake.cli.shutil.which", return_value=None):
             self.assertEqual(find_codex(), str(bundled))
+
+    def test_codex_command_resumes_an_explicit_project_thread(self):
+        from buildbrake.cli import build_codex_command
+
+        root = Path("/tmp/project")
+        fresh = build_codex_command("codex", root, "do work", "workspace-write", None)
+        self.assertEqual(fresh[:2], ["codex", "exec"])
+        self.assertIn("--cd", fresh)
+        self.assertEqual(
+            build_codex_command("codex", root, "do more", "workspace-write", "thread-123"),
+            ["codex", "exec", "resume", "--json", "thread-123", "do more"],
+        )
+
+    def test_codex_thread_state_is_project_local_and_validated(self):
+        from buildbrake.cli import codex_thread_path, load_codex_thread, save_codex_thread
+
+        with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:
+            first_root, second_root = Path(first), Path(second)
+            save_codex_thread(first_root, "thread-12345678")
+            self.assertEqual(load_codex_thread(first_root), "thread-12345678")
+            self.assertIsNone(load_codex_thread(second_root))
+            codex_thread_path(first_root).write_text('{"thread_id":"../../unsafe"}')
+            self.assertIsNone(load_codex_thread(first_root))
+
+    def test_agent_parser_offers_fresh_thread_override(self):
+        from buildbrake.cli import build_parser
+
+        args = build_parser().parse_args([
+            "agent", "--fresh", "--prompt", "Implement one bounded project change safely",
+        ])
+        self.assertTrue(args.fresh)
 
     def test_preflight_blocks_vague_agent_task(self):
         from buildbrake.cli import Contract, preflight

@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import select
 import shlex
 import signal
@@ -22,6 +23,7 @@ STATE_DIR = ".buildbrake"
 CONTRACT_FILE = "outcome.json"
 RECEIPTS_DIR = "receipts"
 TASK_FILE = "task.json"
+CODEX_THREAD_FILE = "codex-thread.json"
 LEGACY_STATE_IGNORE = "receipts/*.log\n"
 LOCAL_STATE_IGNORE = "*\n"
 
@@ -51,6 +53,42 @@ def contract_path(root: Path) -> Path:
 
 def task_path(root: Path) -> Path:
     return state_path(root) / TASK_FILE
+
+
+def codex_thread_path(root: Path) -> Path:
+    return state_path(root) / CODEX_THREAD_FILE
+
+
+def load_codex_thread(root: Path) -> str | None:
+    path = codex_thread_path(root)
+    if not path.is_file():
+        return None
+    try:
+        value = json.loads(path.read_text()).get("thread_id")
+    except (json.JSONDecodeError, AttributeError, OSError):
+        return None
+    if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9-]{8,80}", value):
+        return None
+    return value
+
+
+def save_codex_thread(root: Path, thread_id: str) -> None:
+    ensure_state_ignore(root)
+    codex_thread_path(root).write_text(json.dumps({
+        "thread_id": thread_id,
+        "saved_at": now(),
+    }, indent=2) + "\n")
+
+
+def build_codex_command(
+    codex: str, root: Path, prompt: str, sandbox: str, thread_id: str | None,
+) -> list[str]:
+    if thread_id:
+        return [codex, "exec", "resume", "--json", thread_id, prompt]
+    return [
+        codex, "exec", "--json", "--color", "never", "--sandbox", sandbox,
+        "--cd", str(root), prompt,
+    ]
 
 
 def ensure_state_ignore(root: Path) -> None:
@@ -653,10 +691,9 @@ def run_agent(args: argparse.Namespace) -> int:
         f"{mode_constraint}"
         f"{manifest_context}"
     )
-    command = [
-        codex, "exec", "--json", "--color", "never", "--sandbox", args.sandbox,
-        "--cd", str(root), guarded_prompt,
-    ]
+    thread_id = None if getattr(args, "fresh", False) else load_codex_thread(root)
+    command = build_codex_command(codex, root, guarded_prompt, args.sandbox, thread_id)
+    print(f"Codex context: {'reusing project thread ' + thread_id if thread_id else 'starting a fresh project thread'}")
     forwarded = argparse.Namespace(
         directory=str(root), command=command, no_checkpoints=args.no_checkpoints,
         child_stdin=subprocess.DEVNULL,
@@ -667,6 +704,7 @@ def run_agent(args: argparse.Namespace) -> int:
             "agent_sandbox": args.sandbox,
             "verification_command": args.verify or saved_task.get("verification_command") or None,
             "task_mode": task_mode,
+            "thread_reused": thread_id is not None,
         },
         scope_limits=limits,
     )
@@ -676,13 +714,16 @@ def run_agent(args: argparse.Namespace) -> int:
     if not created:
         return result
     receipt = max(created, key=lambda path: path.stat().st_mtime)
+    receipt_data = json.loads(receipt.read_text())
+    completed_thread = (receipt_data.get("agent_events") or {}).get("thread_id")
+    if result == 0 and isinstance(completed_thread, str) and completed_thread:
+        save_codex_thread(root, completed_thread)
     verification = args.verify or saved_task.get("verification_command")
     if result != 0:
         save_automatic_evaluation(receipt, False, "Agent did not complete successfully.", None)
         return result
     if verification:
         return run_verification(root, receipt, str(verification))
-    receipt_data = json.loads(receipt.read_text())
     if agent_reported_failure(receipt_data):
         message = str(receipt_data.get("agent_events", {}).get("final_message") or "Agent reported it could not reach the target.")
         save_automatic_evaluation(receipt, False, message, None, "agent_reported_failure")
@@ -873,6 +914,7 @@ def build_parser() -> argparse.ArgumentParser:
     agent.add_argument("--force", action="store_true", help="start even when preflight blocks the task")
     agent.add_argument("--verify", help="command that automatically proves the outcome when it exits 0")
     agent.add_argument("--mode", choices=("auto", "small", "standard"), default="auto", help="scope-control mode")
+    agent.add_argument("--fresh", action="store_true", help="start a new Codex thread instead of reusing this project's saved thread")
     agent.set_defaults(func=run_agent)
 
     check = sub.add_parser("preflight", help="check a task without starting an agent")
