@@ -15,7 +15,7 @@ from urllib.parse import quote, urlparse
 
 from buildbrake.cli import (
     CONTRACT_FILE, RECEIPTS_DIR, STATE_DIR, TASK_FILE, calculate_efficiency,
-    load_codex_thread, parse_codex_events,
+    codex_thread_rotation_reason, load_codex_thread, parse_codex_events,
 )
 
 
@@ -221,10 +221,12 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
                         item["changed_files"] = relative_changed_files(root, item.get("changed_files"))
                         item["interpretation"] = receipt_interpretation(item)
                         receipts.append(item)
+                saved_thread = load_codex_thread(root)
                 self.send_bytes(200, "application/json", json_bytes({
                     "contract": contract, "receipts": receipts, "active_run": run_manager.snapshot(),
                     "project_root": str(root.resolve()),
-                    "codex_context_saved": load_codex_thread(root) is not None,
+                    "codex_context_saved": saved_thread is not None,
+                    "codex_context_rotation_reason": codex_thread_rotation_reason(root, saved_thread) if saved_thread else None,
                     "task_saved": (root / STATE_DIR / TASK_FILE).is_file(),
                     "restart_required": backend_source_fingerprint() != startup_fingerprint,
                 }))

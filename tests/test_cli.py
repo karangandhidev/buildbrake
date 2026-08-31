@@ -527,6 +527,9 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertIn("fresh avg →", html)
         self.assertIn("reused avg new tokens", html)
         self.assertIn("context-reused runs", html)
+        self.assertIn("codex_context_rotation_reason", html)
+        self.assertIn("saved context reached its efficiency limit; next run starts fresh", html)
+        self.assertIn("auto-rotated", html)
 
     def test_dashboard_shows_project_location_and_can_clear_quick_task(self):
         from buildbrake.dashboard import dashboard_html
@@ -656,6 +659,13 @@ class BuildBrakeTests(unittest.TestCase):
             "display relative path upto the project it is being run on"
         )
         self.assertEqual(classify_task(relative_path), "small")
+        detailed_css_task = (
+            "There is discrepancy in all the button styles and fonts. I want all buttons to use font "
+            "and font size to match the button check and save, proved and not proved. Do not change "
+            "anything in the buttons given for reference."
+        )
+        self.assertGreater(len(detailed_css_task.split()), 35)
+        self.assertEqual(classify_task(detailed_css_task), "small")
         for narrow_scope in (
             "Validate the entire string before saving",
             "Make the entire button clickable",
@@ -781,6 +791,42 @@ class BuildBrakeTests(unittest.TestCase):
             self.assertIsNone(load_codex_thread(second_root))
             codex_thread_path(first_root).write_text('{"thread_id":"../../unsafe"}')
             self.assertIsNone(load_codex_thread(first_root))
+
+    def test_oversized_or_expensive_codex_threads_are_rotated(self):
+        from buildbrake.cli import codex_thread_rotation_reason
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            receipts = root / ".buildbrake/receipts"
+            receipts.mkdir(parents=True)
+            thread_id = "thread-12345678"
+
+            def write_receipt(name, total, cached, reused=True):
+                (receipts / name).write_text(json.dumps({
+                    "thread_reused": reused,
+                    "agent_events": {
+                        "thread_id": thread_id,
+                        "usage": {"input_tokens": total, "cached_input_tokens": cached},
+                    },
+                }))
+
+            write_receipt("20260831-100000-efficient.json", 220_000, 211_000)
+            self.assertIsNone(codex_thread_rotation_reason(root, thread_id))
+            write_receipt("20260831-110000-oversized.json", 319_342, 243_712)
+            self.assertIn("319,342", codex_thread_rotation_reason(root, thread_id))
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            receipts = root / ".buildbrake/receipts"
+            receipts.mkdir(parents=True)
+            (receipts / "latest.json").write_text(json.dumps({
+                "thread_reused": True,
+                "agent_events": {
+                    "thread_id": "thread-expensive",
+                    "usage": {"input_tokens": 120_000, "cached_input_tokens": 70_000},
+                },
+            }))
+            self.assertIn("50,000 new tokens", codex_thread_rotation_reason(root, "thread-expensive"))
 
     def test_agent_parser_offers_fresh_thread_override(self):
         from buildbrake.cli import build_parser

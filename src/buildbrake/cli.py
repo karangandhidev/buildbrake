@@ -26,6 +26,9 @@ TASK_FILE = "task.json"
 CODEX_THREAD_FILE = "codex-thread.json"
 LEGACY_STATE_IGNORE = "receipts/*.log\n"
 LOCAL_STATE_IGNORE = "*\n"
+MAX_REUSED_THREAD_INPUT_TOKENS = 300_000
+MAX_REUSED_THREAD_NEW_TOKENS = 30_000
+MAX_RUNS_PER_CODEX_THREAD = 6
 
 
 def now() -> str:
@@ -78,6 +81,36 @@ def save_codex_thread(root: Path, thread_id: str) -> None:
         "thread_id": thread_id,
         "saved_at": now(),
     }, indent=2) + "\n")
+
+
+def codex_thread_rotation_reason(root: Path, thread_id: str) -> str | None:
+    """Retire a saved thread before its accumulated context becomes expensive."""
+    receipts = state_path(root) / RECEIPTS_DIR
+    matching: list[dict[str, object]] = []
+    for path in sorted(receipts.glob("*.json"), reverse=True) if receipts.exists() else []:
+        try:
+            receipt = json.loads(path.read_text())
+        except (json.JSONDecodeError, OSError):
+            continue
+        events = receipt.get("agent_events") or {}
+        if isinstance(events, dict) and events.get("thread_id") == thread_id:
+            matching.append(receipt)
+    if not matching:
+        return None
+    latest = matching[0]
+    events = latest.get("agent_events") or {}
+    usage = events.get("usage") if isinstance(events, dict) else {}
+    usage = usage if isinstance(usage, dict) else {}
+    total_tokens = int(usage.get("input_tokens") or 0)
+    cached_tokens = int(usage.get("cached_input_tokens") or 0)
+    new_tokens = max(0, total_tokens - cached_tokens)
+    if total_tokens >= MAX_REUSED_THREAD_INPUT_TOKENS:
+        return f"saved context reached {total_tokens:,} input tokens"
+    if latest.get("thread_reused") is True and new_tokens >= MAX_REUSED_THREAD_NEW_TOKENS:
+        return f"last reuse required {new_tokens:,} new tokens"
+    if len(matching) >= MAX_RUNS_PER_CODEX_THREAD:
+        return f"saved context completed {len(matching)} runs"
+    return None
 
 
 def build_codex_command(
@@ -522,9 +555,7 @@ def classify_task(prompt: str) -> str:
     broad_scope = bool(words & BROAD_TASK_WORDS) or any(
         phrase in normalized for phrase in BROAD_TASK_PHRASES
     )
-    if len(prompt.split()) <= 35 and not broad_scope:
-        return "small"
-    return "standard"
+    return "standard" if broad_scope else "small"
 
 
 def requires_human_review(prompt: str) -> bool:
@@ -699,10 +730,15 @@ def run_agent(args: argparse.Namespace) -> int:
         f"{mode_constraint}"
         f"{manifest_context}"
     )
-    thread_id = None if getattr(args, "fresh", False) else load_codex_thread(root)
+    saved_thread_id = None if getattr(args, "fresh", False) else load_codex_thread(root)
+    rotation_reason = codex_thread_rotation_reason(root, saved_thread_id) if saved_thread_id else None
+    thread_id = None if rotation_reason else saved_thread_id
     reasoning_effort = "low" if task_mode == "small" else None
     command = build_codex_command(codex, root, guarded_prompt, args.sandbox, thread_id, reasoning_effort)
-    print(f"Codex context: {'reusing project thread ' + thread_id if thread_id else 'starting a fresh project thread'}")
+    if rotation_reason:
+        print(f"Codex context: starting fresh automatically · {rotation_reason}")
+    else:
+        print(f"Codex context: {'reusing project thread ' + thread_id if thread_id else 'starting a fresh project thread'}")
     print(f"Reasoning effort: {reasoning_effort or 'user default'}")
     forwarded = argparse.Namespace(
         directory=str(root), command=command, no_checkpoints=args.no_checkpoints,
@@ -715,6 +751,7 @@ def run_agent(args: argparse.Namespace) -> int:
             "verification_command": args.verify or saved_task.get("verification_command") or None,
             "task_mode": task_mode,
             "thread_reused": thread_id is not None,
+            "context_rotation_reason": rotation_reason,
             "agent_reasoning_effort": reasoning_effort or "user_default",
         },
         scope_limits=limits,

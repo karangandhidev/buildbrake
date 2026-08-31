@@ -277,6 +277,7 @@ const LIVE_REFRESH_MS = 2000;
 const IDLE_REFRESH_MS = 30000;
 let refreshTimer;
 let savedCodexContext = false;
+let contextRotationReason = null;
 let projectRoot = '';
 let pendingEvaluation = null;
 let savedTaskAvailable = false;
@@ -392,7 +393,9 @@ function renderAgentRun(run) {
       ? `<div><label class="context-choice"><input id="fresh-context" type="checkbox" ${freshContext ? 'checked' : ''}> Start with fresh context</label><button type="button" onclick="runAgent()">Run saved task</button></div>`
       : '<span class="muted">No saved task</span>';
   const output = run.lines?.length ? `<div class="live-output">${run.lines.map(esc).join('<br>')}</div>` : '';
-  const contextStatus = savedCodexContext ? 'saved project context ready' : 'next run starts fresh';
+  const contextStatus = contextRotationReason
+    ? `saved context reached its efficiency limit; next run starts fresh (${contextRotationReason})`
+    : savedCodexContext ? 'saved project context ready' : 'next run starts fresh';
   control.innerHTML = `<div class="live-head"><div><h2>Agent run</h2><span class="${statusClass}">${esc(run.status)}</span> · ${duration(run.elapsed_seconds)}<br><span class="muted">${contextStatus}</span></div>${controls}</div>${output}`;
   const nextOutput = document.querySelector('#agent-control .live-output');
   if (nextOutput) nextOutput.scrollTop = wasAtBottom ? nextOutput.scrollHeight : previousScrollTop;
@@ -457,10 +460,11 @@ async function loadState(populateForm = false) {
   try {
   const response = await fetch('/api/state', {cache: 'no-store'});
   if (!response.ok) throw new Error(`server returned ${response.status}`);
-  const {contract: c, receipts, active_run, project_root, codex_context_saved, task_saved, restart_required} = await response.json();
+  const {contract: c, receipts, active_run, project_root, codex_context_saved, codex_context_rotation_reason, task_saved, restart_required} = await response.json();
   projectRoot = project_root || '';
   document.querySelector('#project-location').textContent = projectRoot || 'Unknown project';
   savedCodexContext = codex_context_saved === true;
+  contextRotationReason = codex_context_rotation_reason || null;
   savedTaskAvailable = task_saved === true;
   showRestartNotice(restart_required === true);
   const run = active_run || {status:'idle',elapsed_seconds:0,lines:[]};
@@ -540,7 +544,7 @@ async function loadState(populateForm = false) {
       <div class="run-layout">
         <div class="run-primary">
           <div class="run-primary-meta">
-            <div><strong>${isAgent ? 'Codex thread' : 'Run type'}</strong>${isAgent ? `${esc(r.agent_events?.thread_id || '—')} · ${r.thread_reused ? 'reused' : 'fresh'}` : 'local command'}</div>
+            <div><strong>${isAgent ? 'Codex thread' : 'Run type'}</strong>${isAgent ? `${esc(r.agent_events?.thread_id || '—')} · ${r.thread_reused ? 'reused' : 'fresh'}${r.context_rotation_reason ? ` · auto-rotated (${esc(r.context_rotation_reason)})` : ''}` : 'local command'}</div>
             <div><strong>Runtime</strong>${duration(r.elapsed_seconds)}</div>
             <div><strong>Files changed</strong>${r.changed_files.length}${r.task_mode ? ` · ${esc(r.task_mode)} mode · ${esc(r.agent_reasoning_effort === 'user_default' ? 'default' : r.agent_reasoning_effort || 'default')} reasoning` :''}<span class="file-list">${changedFiles}</span></div>
             <div><strong>Stopped because</strong>${esc((r.stopping_reason || '—').replaceAll('_',' '))}</div>
