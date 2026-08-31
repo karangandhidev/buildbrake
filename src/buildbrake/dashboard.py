@@ -147,8 +147,11 @@ def receipt_interpretation(receipt: dict[str, object]) -> dict[str, str] | None:
     }
 
 
-def dashboard_agent_command(root: Path) -> str:
-    return shlex.join([sys.executable, "-m", "buildbrake.cli", "-C", str(root), "agent"])
+def dashboard_agent_command(root: Path, mode: str = "auto") -> str:
+    command = [sys.executable, "-m", "buildbrake.cli", "-C", str(root), "agent"]
+    if mode in ("small", "standard"):
+        command.extend(["--mode", mode])
+    return shlex.join(command)
 
 
 def rewrite_task_example(contract: object) -> str:
@@ -299,6 +302,10 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
                 self.send_bytes(400, "application/json", json_bytes({"error": "all task fields are required"}))
                 return
             verification_command = body.get("verification_command", "")
+            requested_mode = body.get("mode", "auto")
+            if requested_mode not in ("auto", "small", "standard"):
+                self.send_bytes(400, "application/json", json_bytes({"error": "invalid task mode"}))
+                return
             if not isinstance(verification_command, str) or len(verification_command) > 2_000:
                 self.send_bytes(400, "application/json", json_bytes({"error": "invalid verification command"}))
                 return
@@ -326,16 +333,18 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
             folder = root / STATE_DIR
             folder.mkdir(exist_ok=True)
             from dataclasses import asdict
+            from buildbrake.cli import classify_task
+            mode = classify_task(body["prompt"]) if requested_mode == "auto" else requested_mode
             (folder / CONTRACT_FILE).write_text(json.dumps(asdict(contract), indent=2) + "\n")
             (folder / TASK_FILE).write_text(json.dumps({
                 "prompt": body["prompt"].strip(),
                 "verification_command": verification_command.strip() or None,
+                "mode": mode,
                 "saved_at": now(),
             }, indent=2) + "\n")
-            command = dashboard_agent_command(root)
-            from buildbrake.cli import classify_task
+            command = dashboard_agent_command(root, mode)
             self.send_bytes(200, "application/json", json_bytes({
-                "decision": "PASS", "command": command, "mode": classify_task(body["prompt"]),
+                "decision": "PASS", "command": command, "mode": mode,
                 "budget_minutes": budget, "verification_command": verification_command.strip() or None,
             }))
 
@@ -347,7 +356,11 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
                 return
             from buildbrake.cli import Contract, classify_task, now, preflight, requires_human_review
             prompt = prompt.strip()
-            mode = classify_task(prompt)
+            requested_mode = body.get("mode", "auto") if body else "auto"
+            if requested_mode not in ("auto", "small", "standard"):
+                self.send_bytes(400, "application/json", json_bytes({"error": "invalid task mode"}))
+                return
+            mode = classify_task(prompt) if requested_mode == "auto" else requested_mode
             budget, checkpoint = (3.0, 1.0) if mode == "small" else (15.0, 5.0)
             contract = Contract(
                 problem=f"The requested project change is not implemented: {prompt}",
@@ -367,9 +380,10 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
             from dataclasses import asdict
             (folder / CONTRACT_FILE).write_text(json.dumps(asdict(contract), indent=2) + "\n")
             (folder / TASK_FILE).write_text(json.dumps({
-                "prompt": prompt, "verification_command": verification, "saved_at": now(), "created_with": "quick_task",
+                "prompt": prompt, "verification_command": verification, "mode": mode,
+                "saved_at": now(), "created_with": "quick_task",
             }, indent=2) + "\n")
-            command = dashboard_agent_command(root)
+            command = dashboard_agent_command(root, mode)
             self.send_bytes(200, "application/json", json_bytes({
                 "decision": "PASS", "command": command, "mode": mode,
                 "budget_minutes": budget, "verification_command": verification,

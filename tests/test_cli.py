@@ -39,6 +39,8 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertNotIn('<details id="agent-control"', html)
         self.assertIn('id="fresh-context"', html)
         self.assertIn("JSON.stringify({fresh})", html)
+        self.assertIn('Small · strict and low cost', html)
+        self.assertIn('Standard · broader work', html)
 
     def test_dashboard_live_terminal_refresh_and_scrolling(self):
         html = (ROOT / "src/buildbrake/static/index.html").read_text()
@@ -304,6 +306,7 @@ class BuildBrakeTests(unittest.TestCase):
                 "budget_minutes": "3", "checkpoint_minutes": "1",
                 "prompt": "Update README instructions so new users can start the documented guarded task",
                 "verification_command": "python3 -c \"print('verified')\"",
+                "mode": "standard",
             }
             try:
                 request = urllib.request.Request(
@@ -318,6 +321,8 @@ class BuildBrakeTests(unittest.TestCase):
                 saved = json.loads((Path(folder) / ".buildbrake/task.json").read_text())
                 self.assertEqual(saved["prompt"], payload["prompt"])
                 self.assertEqual(saved["verification_command"], payload["verification_command"])
+                self.assertEqual(saved["mode"], "standard")
+                self.assertIn("--mode standard", data["command"])
                 contract = json.loads((Path(folder) / ".buildbrake/outcome.json").read_text())
                 self.assertEqual(contract["success"], payload["success"])
             finally:
@@ -343,7 +348,7 @@ class BuildBrakeTests(unittest.TestCase):
             try:
                 request = urllib.request.Request(
                     f"http://127.0.0.1:{server.server_port}/api/quick-task",
-                    data=json.dumps({"prompt": prompt}).encode(),
+                    data=json.dumps({"prompt": prompt, "mode": "small"}).encode(),
                     headers={"Content-Type": "application/json"}, method="POST",
                 )
                 with urllib.request.urlopen(request) as response:
@@ -353,6 +358,7 @@ class BuildBrakeTests(unittest.TestCase):
                 self.assertIn("unittest discover", data["verification_command"])
                 task = json.loads((root / ".buildbrake/task.json").read_text())
                 self.assertEqual(task["prompt"], prompt)
+                self.assertEqual(task["mode"], "small")
                 contract = json.loads((root / ".buildbrake/outcome.json").read_text())
                 self.assertIn(prompt, contract["success"])
             finally:

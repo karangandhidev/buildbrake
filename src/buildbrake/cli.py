@@ -658,10 +658,12 @@ def run_agent(args: argparse.Namespace) -> int:
     if task_path(root).is_file():
         saved_task = json.loads(task_path(root).read_text())
     prompt = args.prompt
+    prompt_from_saved_task = False
     if args.prompt_file:
         prompt = Path(args.prompt_file).read_text()
     if not prompt:
         prompt = saved_task.get("prompt")
+        prompt_from_saved_task = True
     if not prompt or not prompt.strip():
         print("Provide --prompt/--prompt-file or save a task from the dashboard.", file=sys.stderr)
         return 2
@@ -671,7 +673,11 @@ def run_agent(args: argparse.Namespace) -> int:
         return 2
     if failures:
         print("Preflight overridden with --force. Starting agent despite the risks.")
-    task_mode = classify_task(prompt) if args.mode == "auto" else args.mode
+    saved_mode = saved_task.get("mode") if prompt_from_saved_task else None
+    task_mode = (
+        saved_mode if args.mode == "auto" and saved_mode in ("small", "standard")
+        else classify_task(prompt) if args.mode == "auto" else args.mode
+    )
     limits = {"max_commands": 6, "max_files": 3} if task_mode == "small" else None
     manifest = project_manifest(root) if task_mode == "small" else []
     mode_constraint = (

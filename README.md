@@ -99,7 +99,7 @@ buildbrake serve
 The dashboard opens at `http://127.0.0.1:8765`. It shows the contract, runtime used, stopped runs, and which outcomes were actually proved.
 Agent receipts can be expanded to show the agent's final finding. You can mark a run proved or not proved, add evidence, and save that evaluation directly from the dashboard.
 
-For ordinary work, enter one sentence under **What should the agent do?** BuildBrake creates the contract, selects a task mode and budget, detects a project test command when possible, and returns a copy-friendly launch command. The full contract remains available under **Advanced task details**.
+For ordinary work, enter one sentence under **What should the agent do?** BuildBrake creates the contract, selects a task mode and budget, detects a project test command when possible, and returns a copy-friendly launch command. Leave **Task size** on Auto for normal use, or explicitly choose Small/Standard when you need a strict cheap run or genuinely broader scope. The full contract remains available under **Advanced task details**.
 
 After saving, click **Run task** in the dashboard. Live readable progress, elapsed time, and a **Stop agent** control remain on the page; the completed receipt appears automatically. The terminal command is retained under **Terminal alternative** for automation and advanced use.
 
