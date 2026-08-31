@@ -10,16 +10,30 @@
     html { scroll-behavior: smooth; }
     body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 15% 0%, rgba(112, 224, 155, .11), transparent 32rem), radial-gradient(circle at 90% 8%, rgba(111, 124, 255, .12), transparent 30rem), #080b12; }
     body::before { content: ''; position: fixed; inset: 0; pointer-events: none; opacity: .18; background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px); background-size: 32px 32px; mask-image: linear-gradient(to bottom, black, transparent 72%); }
-    main { position: relative; max-width: 1080px; margin: 0 auto; padding: 48px 24px 80px; }
+    main { position: relative; max-width: 1240px; margin: 0 auto; padding: 36px 24px 80px; }
     header { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 38px; }
     h1 { font-size: clamp(2.5rem, 7vw, 4.75rem); line-height: .95; letter-spacing: -.065em; margin: 0; }
     h2 { font-size: .76rem; color: #8f99ab; text-transform: uppercase; letter-spacing: .16em; }
-    .brand-copy { margin: 12px 0 0; color: #98a2b5; font-size: 1rem; }
+    .brand-copy { margin: 10px 0 0; color: #98a2b5; font-size: 1rem; }
     .mark { background: linear-gradient(135deg, #76e5a0, #6fbaff); -webkit-background-clip: text; background-clip: text; color: transparent; }
     .pill { border: 1px solid rgba(118,229,160,.28); border-radius: 999px; padding: 9px 13px; color: #a8e7be; background: rgba(112,224,155,.07); font-size: .82rem; box-shadow: inset 0 1px rgba(255,255,255,.05); }
     .pill::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: #70e09b; box-shadow: 0 0 12px #70e09b; }
+    .workspace { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 24px; align-items: start; }
+    .companion { position: sticky; top: 24px; overflow: hidden; border: 1px solid rgba(255,255,255,.09); border-radius: 24px; padding: 24px; background: linear-gradient(165deg, rgba(30,38,51,.96), rgba(15,19,27,.96)); box-shadow: 0 20px 55px rgba(0,0,0,.24); }
+    .companion::after { content: ''; position: absolute; width: 190px; height: 190px; right: -90px; top: -95px; border-radius: 50%; background: rgba(112,224,155,.12); filter: blur(8px); }
+    .eyebrow { color: #70e09b; font-size: .7rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+    .companion h2 { margin: 12px 0 8px; color: #f4f6fb; font-size: 1.35rem; line-height: 1.2; letter-spacing: -.025em; text-transform: none; }
+    .companion > p { margin: 0; color: #98a2b5; font-size: .9rem; line-height: 1.55; }
+    .journey { display: grid; gap: 18px; margin: 28px 0; padding: 0; list-style: none; counter-reset: journey; }
+    .journey li { position: relative; padding-left: 38px; color: #c5cbd6; font-size: .86rem; line-height: 1.4; counter-increment: journey; }
+    .journey li::before { content: counter(journey); position: absolute; left: 0; top: -2px; display: grid; place-items: center; width: 25px; height: 25px; border: 1px solid #3b4656; border-radius: 8px; background: #151b25; color: #7be4a2; font: 700 .72rem ui-monospace, monospace; }
+    .journey li:not(:last-child)::after { content: ''; position: absolute; left: 12px; top: 26px; width: 1px; height: 18px; background: #343c49; }
+    .side-note { border-top: 1px solid rgba(255,255,255,.08); padding-top: 18px; color: #7f899a; font-size: .78rem; line-height: 1.5; }
+    .content { min-width: 0; }
     .contract { border: 1px solid rgba(255,255,255,.08); background: rgba(17,21,30,.78); border-radius: 22px; padding: 28px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; box-shadow: 0 18px 55px rgba(0,0,0,.22); backdrop-filter: blur(12px); }
     .new-task { border: 1px solid rgba(255,255,255,.09); background: linear-gradient(145deg, rgba(24,29,41,.94), rgba(14,18,27,.94)); border-radius: 24px; padding: 30px; margin-bottom: 20px; box-shadow: 0 22px 70px rgba(0,0,0,.3), inset 0 1px rgba(255,255,255,.04); }
+    .quick-task { background: linear-gradient(140deg, rgba(27,36,43,.98), rgba(16,20,29,.96)); border-color: rgba(112,224,155,.17); }
+    .quick-task h2::after { content: 'Start here'; margin-left: 10px; border-radius: 999px; padding: 4px 7px; background: rgba(112,224,155,.1); color: #85dda6; font-size: .6rem; letter-spacing: .08em; }
     .new-task h2 { margin-top: 0; }
     .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
     label { color: #aab2c0; font-size: .82rem; }
@@ -77,19 +91,125 @@
     details { margin-top: 10px; max-width: 480px; }
     summary { cursor: pointer; color: #9ea7b7; }
     pre { white-space: pre-wrap; overflow-wrap: anywhere; color: #c9cfda; font-family: inherit; line-height: 1.5; }
-    .empty { padding: 40px 0; color: #858e9f; }
+    .empty { padding: 34px; border: 1px dashed #303847; border-radius: 18px; color: #858e9f; text-align: center; background: rgba(255,255,255,.015); }
     .section-head { display: flex; align-items: center; justify-content: space-between; margin: 34px 0 24px; }
     .section-head h2 { margin: 0; }
     footer { margin-top: 48px; padding-top: 22px; border-top: 1px solid rgba(255,255,255,.06); color: #687386; font-size: .85rem; }
+    @media (max-width: 920px) { .workspace { grid-template-columns: 1fr; } .companion { position: relative; top: 0; } .journey { grid-template-columns: repeat(3, 1fr); } .journey li:not(:last-child)::after { display: none; } }
     @media (max-width: 820px) { .run-layout { grid-template-columns: 1fr; } .run-resources { border-left: 0; border-top: 1px solid #252a33; padding: 22px 0 0; } }
-    @media (max-width: 680px) { main { padding: 34px 16px 56px; } .contract, .summary, .run-primary-meta, .form-grid { grid-template-columns: 1fr; } .wide { grid-column: auto; } header, .run-head { align-items: flex-start; flex-direction: column; } .new-task, .contract { padding: 22px; border-radius: 18px; } }
+    @media (max-width: 680px) { main { padding: 28px 16px 56px; } .contract, .summary, .run-primary-meta, .form-grid, .journey { grid-template-columns: 1fr; } .wide { grid-column: auto; } header, .run-head { align-items: flex-start; flex-direction: column; } .new-task, .contract, .companion { padding: 22px; border-radius: 18px; } .journey li:not(:last-child)::after { display: block; } }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
+    /* Deliberately plain product UI: functional, quiet, and free of sci-fi styling. */
+    :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f4f3ef; color: #22221f; }
+    body { background: #f4f3ef; color: #22221f; }
+    body::before, .companion::after { display: none; }
+    main { max-width: 1180px; padding-top: 24px; }
+    header { margin-bottom: 24px; padding-bottom: 18px; border-bottom: 1px solid #cac8c0; }
+    h1 { font-size: 1.35rem; line-height: 1; letter-spacing: -.025em; }
+    h2 { color: #65635c; letter-spacing: .08em; }
+    .brand-copy { display: inline; margin-left: 10px; color: #77746c; font-size: .85rem; }
+    header > div:first-child { display: flex; align-items: baseline; }
+    .mark { background: none; color: inherit; }
+    .pill { border-color: #bbb9b1; border-radius: 3px; padding: 6px 9px; color: #4e4d47; background: #ebeae5; box-shadow: none; font-size: .75rem; }
+    .pill::before { width: 6px; height: 6px; background: #43824d; box-shadow: none; }
+    .workspace { grid-template-columns: 220px minmax(0, 1fr); gap: 32px; }
+    .companion { top: 20px; border: 0; border-radius: 0; padding: 4px 24px 4px 0; background: transparent; box-shadow: none; border-right: 1px solid #cac8c0; }
+    .eyebrow { color: #77746c; font-size: .65rem; letter-spacing: .1em; }
+    .companion h2 { margin: 8px 0 7px; color: #22221f; font: 600 1rem/1.3 Georgia, serif; letter-spacing: 0; }
+    .companion > p { color: #65635c; font-size: .82rem; }
+    .journey { gap: 14px; margin: 22px 0; }
+    .journey li { padding-left: 30px; color: #4e4d47; font-size: .8rem; }
+    .journey li::before { width: 20px; height: 20px; border-color: #aaa89f; border-radius: 50%; background: transparent; color: #4e4d47; font-size: .65rem; }
+    .journey li:not(:last-child)::after { left: 10px; top: 20px; height: 16px; background: #cac8c0; }
+    .side-note { border-color: #d5d3cc; color: #77746c; }
+    .new-task, .contract, .metric, .run { border: 1px solid #c8c6be; border-radius: 4px; background: #fff; box-shadow: none; }
+    .new-task { padding: 24px; margin-bottom: 16px; }
+    .quick-task { border-top: 3px solid #315f8d; }
+    .quick-task h2::after { content: 'New'; border-radius: 2px; background: #e4edf5; color: #315f8d; }
+    label { color: #55534d; }
+    input, textarea, select { border-color: #aaa89f; border-radius: 3px; background: #fff; color: #22221f; }
+    input:focus, textarea:focus, select:focus { border-color: #315f8d; background: #fff; box-shadow: 0 0 0 2px #dce8f2; }
+    textarea::placeholder, input::placeholder { color: #908d84; }
+    .primary { border-color: #315f8d; background: #315f8d; color: #fff; box-shadow: none; }
+    button { border-color: #aaa89f; border-radius: 3px; background: #f6f5f1; color: #292824; transition: background .12s, border-color .12s; }
+    button:hover { border-color: #77746c; background: #eae9e3; filter: none; transform: none; }
+    button:focus-visible, summary:focus-visible { outline-color: #315f8d; }
+    .command-box, .live-output { border-color: #d0cec6; border-radius: 3px; background: #f0efe9; color: #292824; }
+    .restart-notice { border-color: #b49a5c; border-radius: 3px; background: #fff8df; color: #56471e; }
+    .restart-notice code { background: #ebe8dc; color: #22221f; }
+    .field strong, .run-primary-meta strong, .run-resources strong { color: #77746c; }
+    .success { border-color: #43824d; }
+    .metric { padding: 16px; }
+    .metric b { font: 600 1.6rem Georgia, serif; }
+    .metric span, .muted { color: #77746c; }
+    .runs { gap: 12px; }
+    .run { padding: 20px; transition: none; }
+    .run:hover { transform: none; border-color: #8e8b82; }
+    .run-id { color: #65635c; }
+    .tag { border-color: #aaa89f; border-radius: 3px; }
+    .run-resources, .decision { border-color: #d5d3cc; }
+    .decision .proved-button { background: #43824d; border-color: #43824d; color: #fff; }
+    .decision .not-proved-button { background: #a7463e; border-color: #a7463e; color: #fff; }
+    .good { color: #397343; } .bad { color: #a23f38; }
+    summary { color: #55534d; }
+    pre { color: #3f3e39; }
+    .empty { border-color: #aaa89f; border-radius: 3px; background: #ebeae5; color: #65635c; }
+    footer { border-color: #cac8c0; color: #77746c; }
+    @media (max-width: 920px) { .companion { border-right: 0; border-bottom: 1px solid #cac8c0; padding: 0 0 18px; } }
+    .run { padding: 0; overflow: hidden; }
+    .run-head { margin: 0; padding: 14px 18px; border-bottom: 1px solid #d5d3cc; background: #f6f5f1; }
+    .run-task { margin: 0; padding: 18px; border-bottom: 1px solid #e1dfd8; font: 500 1rem/1.55 Georgia, serif; overflow-wrap: anywhere; }
+    .run-layout { display: block; }
+    .run-primary { padding: 18px; }
+    .run-primary-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; overflow: hidden; border: 1px solid #d5d3cc; background: #d5d3cc; }
+    .run-primary-meta > div { min-width: 0; padding: 13px 14px; background: #fff; line-height: 1.45; overflow-wrap: anywhere; word-break: normal; }
+    .file-list { display: block; margin-top: 5px; color: #55534d; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .75rem; line-height: 1.6; overflow-wrap: anywhere; word-break: break-word; }
+    .run-primary details { margin-top: 16px; }
+    .run-interpretation { margin-top: 18px; padding: 14px 16px; border: 1px solid #d5d3cc; border-left: 3px solid #43824d; background: #f7f8f3; line-height: 1.5; }
+    .decision { display: flex; flex-wrap: nowrap; align-items: flex-start; justify-content: space-between; gap: 24px; margin-top: 18px; padding-top: 16px; }
+    .decision-copy { min-width: 0; line-height: 1.5; overflow-wrap: anywhere; }
+    .decision-copy .muted { display: inline-block; margin-top: 4px; }
+    .decision-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; margin-left: auto; }
+    .decision button { margin-top: 0; }
+    .decision .not-proved-button { margin-left: 0; }
+    .run-resources { display: block; border: 0; border-top: 1px solid #d5d3cc; padding: 18px; background: #faf9f6; }
+    .run-resources > div { min-width: 0; }
+    .run-resources > div + div { margin-top: 16px; }
+    .usage-value { display: block; padding: 10px 12px; border: 1px solid #d5d3cc; background: #fff; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .78rem; overflow-wrap: anywhere; }
+    .resource-comparison { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+    .resource-row { display: flex; min-width: 0; flex-direction: column; gap: 4px; padding: 11px 12px; border: 1px solid #d5d3cc; background: #fff; }
+    .resource-name { color: #77746c; font-size: .7rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+    .resource-values { font: 600 .82rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; }
+    .resource-status { font-size: .76rem; }
+    @media (max-width: 820px) { .resource-comparison { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 680px) { .run-primary-meta, .resource-comparison { grid-template-columns: 1fr; } .decision { flex-wrap: wrap; } .decision-actions { width: 100%; justify-content: flex-end; } .run-head, .run-task, .run-primary, .run-resources { padding-left: 15px; padding-right: 15px; } }
+    .contract { display: block; padding: 0; overflow: hidden; }
+    .contract .field { min-width: 0; padding: 12px 16px; border-bottom: 1px solid #e1dfd8; }
+    .contract .field:last-child { border-bottom: 0; }
+    .contract .field span { display: block; font-size: .9rem; line-height: 1.4; overflow-wrap: anywhere; }
+    .contract .success { border-left: 0; padding-left: 16px; }
+    .finding { border: 1px solid #b8cbd9; background: #eef5f8; }
+    .finding > summary { padding: 11px 13px; color: #244b66; font-weight: 650; background: #e2eef4; }
+    .finding[open] > summary { border-bottom: 1px solid #b8cbd9; }
+    .finding > pre { margin: 0; padding: 15px; color: #19394f; background: #f3f8fa; }
+    .command-box { align-items: stretch; padding: 0; overflow: hidden; }
+    .command-box code { min-width: 0; padding: 12px 14px 16px; line-height: 1.55; scrollbar-gutter: stable; }
+    .command-box button { flex: 0 0 auto; align-self: stretch; margin: 0; border-width: 0 0 0 1px; border-radius: 0; white-space: nowrap; }
   </style>
 </head>
 <body>
 <main>
-  <header><div><h1>Build<span class="mark">Brake</span></h1><p class="brand-copy">Ship with proof, not guesswork.</p></div><div class="pill">Local &amp; private</div></header>
+  <header><div><h1>Build<span class="mark">Brake</span></h1><p class="brand-copy">Task controls and run history</p></div><div class="pill">Local</div></header>
   <div id="restart-notice" class="restart-notice" hidden><strong>Dashboard restart required</strong><br>BuildBrake’s backend changed. Stop the current server with Ctrl+C, then run:<br><code>./bb serve</code><button type="button" onclick="copyRestartCommand(this)">Copy command</button></div>
+  <div class="workspace">
+  <aside class="companion" aria-label="Build workflow">
+    <span class="eyebrow">Workflow</span>
+    <h2>Run a guarded task</h2>
+    <p>Set the outcome and limits before starting a run.</p>
+    <ol class="journey"><li>Describe the outcome</li><li>Run the guarded task</li><li>Review the receipt</li></ol>
+    <div class="side-note">Run data is stored locally in this project.</div>
+  </aside>
+  <div class="content">
   <section class="new-task quick-task">
     <h2>What should the agent do?</h2>
     <form id="quick-task-form">
@@ -122,7 +242,9 @@
   <section id="summary" class="summary"></section>
   <div class="section-head"><h2>Run receipts</h2><div><span id="last-updated" class="muted"></span><button type="button" onclick="loadState(false)">Refresh runs</button></div></div>
   <div id="runs"></div>
-  <footer>This page reads local BuildBrake receipts and checks for completed runs automatically.</footer>
+  <footer>Completed runs appear here automatically.</footer>
+  </div>
+  </div>
 </main>
 <script>
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -131,6 +253,12 @@ const LIVE_REFRESH_MS = 2000;
 const IDLE_REFRESH_MS = 30000;
 let refreshTimer;
 let savedCodexContext = false;
+let projectRoot = '';
+function projectRelative(value) {
+  const text = String(value ?? '');
+  if (!projectRoot) return text;
+  return text.split(`${projectRoot}/`).join('').split(projectRoot).join('.');
+}
 function showRestartNotice(required) {
   document.querySelector('#restart-notice').hidden = !required;
 }
@@ -156,7 +284,7 @@ async function copyCommand(button) {
 }
 function savedTaskResult(data) {
   const verification = data.verification_command ? `<div class="muted">Automatic verification: ${esc(data.verification_command)}</div>` : '<div class="muted">Outcome will require human evaluation.</div>';
-  return `<span class="good">Task passed and was saved.</span>${data.mode ? `<div>${esc(data.mode)} mode · ${data.budget_minutes} minute configured target</div>` : ''}${verification}<button class="primary" type="button" onclick="runAgent()">Run task</button><details class="terminal-alternative"><summary>Terminal alternative</summary><div class="command-box"><code>${esc(data.command)}</code><button type="button" onclick="copyCommand(this)">Copy command</button></div></details>`;
+  return `<span class="good">Task passed and was saved.</span>${data.mode ? `<div>${esc(data.mode)} mode · ${data.budget_minutes} minute configured target</div>` : ''}${verification}<button class="primary" type="button" onclick="runAgent()">Run task</button><details class="terminal-alternative"><summary>Terminal alternative</summary><div class="command-box"><code>${esc(projectRelative(data.command))}</code><button type="button" onclick="copyCommand(this)">Copy command</button></div></details>`;
 }
 async function runAgent() {
   const fresh = document.querySelector('#fresh-context')?.checked === true;
@@ -250,7 +378,8 @@ async function loadState(populateForm = false) {
   try {
   const response = await fetch('/api/state', {cache: 'no-store'});
   if (!response.ok) throw new Error(`server returned ${response.status}`);
-  const {contract: c, receipts, active_run, codex_context_saved, restart_required} = await response.json();
+  const {contract: c, receipts, active_run, project_root, codex_context_saved, restart_required} = await response.json();
+  projectRoot = project_root || '';
   savedCodexContext = codex_context_saved === true;
   showRestartNotice(restart_required === true);
   const run = active_run || {status:'idle',elapsed_seconds:0,lines:[]};
@@ -296,7 +425,7 @@ async function loadState(populateForm = false) {
     const evaluation = r.evaluation?.proved_success;
     const decision = evaluation === true ? '<span class="good">proved</span>' : evaluation === false ? '<span class="bad">not proved</span>' : '<span class="muted">not evaluated</span>';
     const note = r.evaluation?.evidence ? `<br><span class="muted">${esc(r.evaluation.evidence)}</span>` : '';
-    const label = `${decision}${note}<br><button class="proved-button" onclick="evaluateRun('${esc(r.id)}', true)">Proved</button><button class="not-proved-button" onclick="evaluateRun('${esc(r.id)}', false)">Not proved</button>`;
+    const label = `<div class="decision-copy"><strong>Outcome:</strong> ${decision}${note}</div><div class="decision-actions"><button class="proved-button" onclick="evaluateRun('${esc(r.id)}', true)">Proved</button><button class="not-proved-button" onclick="evaluateRun('${esc(r.id)}', false)">Not proved</button></div>`;
     const command = r.run_type === 'ai_agent' ? `${r.agent} agent: ${r.agent_prompt}` : r.command.join(' ');
     const isAgent = r.run_type === 'ai_agent';
     const type = isAgent ? 'AI agent' : 'command';
@@ -312,7 +441,7 @@ async function loadState(populateForm = false) {
       ? `<div class="run-interpretation ${r.interpretation.status === 'already_satisfied' ? 'good' : 'muted'}"><strong>${esc(r.interpretation.label)}</strong><br>${esc(r.interpretation.message)}</div>`
       : '';
     const findingTitle = r.interpretation ? "Agent's raw finding" : "Agent's final finding";
-    const finding = r.agent_events?.final_message ? `<details><summary>${findingTitle}</summary><pre>${esc(r.agent_events.final_message)}</pre></details>` : '';
+    const finding = r.agent_events?.final_message ? `<details class="finding"><summary>${findingTitle}</summary><pre>${esc(projectRelative(r.agent_events.final_message))}</pre></details>` : '';
     const efficiency = r.efficiency;
     const resourceNames = {new_tokens: 'New tokens', commands: 'Commands', files: 'Files changed', runtime: 'Runtime'};
     const resourceValue = (metric, value) => metric === 'runtime' ? duration(value) : value.toLocaleString();
@@ -321,7 +450,7 @@ async function loadState(populateForm = false) {
           const status = comparison.status === 'within_target'
             ? '<span class="good">within target</span>'
             : `<span class="bad">over target by ${comparison.percent_over.toLocaleString()}%</span>`;
-          return `<div class="resource-row"><span>${resourceNames[metric]}</span><span>${resourceValue(metric, comparison.actual)} / ${resourceValue(metric, comparison.configured_target)} configured target · ${status}</span></div>`;
+          return `<div class="resource-row"><span class="resource-name">${resourceNames[metric]}</span><span class="resource-values">${resourceValue(metric, comparison.actual)} / ${resourceValue(metric, comparison.configured_target)}</span><span class="resource-status">${status}</span></div>`;
         }).join('')}</div>`
       : '—';
     return `<article class="run" data-receipt="${esc(r.id)}">
@@ -332,11 +461,11 @@ async function loadState(populateForm = false) {
           <div class="run-primary-meta">
             <div><strong>${isAgent ? 'Codex thread' : 'Run type'}</strong>${isAgent ? `${esc(r.agent_events?.thread_id || '—')} · ${r.thread_reused ? 'reused' : 'fresh'}` : 'local command'}</div>
             <div><strong>Runtime</strong>${duration(r.elapsed_seconds)}</div>
-            <div><strong>Files changed</strong>${r.changed_files.length}${r.task_mode ? ` · ${esc(r.task_mode)} mode · ${esc(r.agent_reasoning_effort === 'user_default' ? 'default' : r.agent_reasoning_effort || 'default')} reasoning` :''}<br>${changedFiles}</div>
+            <div><strong>Files changed</strong>${r.changed_files.length}${r.task_mode ? ` · ${esc(r.task_mode)} mode · ${esc(r.agent_reasoning_effort === 'user_default' ? 'default' : r.agent_reasoning_effort || 'default')} reasoning` :''}<span class="file-list">${changedFiles}</span></div>
             <div><strong>Stopped because</strong>${esc((r.stopping_reason || '—').replaceAll('_',' '))}</div>
-          </div>${interpretation}${finding}<div class="decision"><strong>Outcome: </strong>${label}</div>
+          </div>${interpretation}${finding}<div class="decision">${label}</div>
         </div>
-        <aside class="run-resources"><div><strong>Usage</strong>${usage}</div><div><strong>Resource comparison</strong>${efficiencyLabel}</div></aside>
+        <aside class="run-resources"><div><strong>Usage</strong><span class="usage-value">${usage}</span></div><div><strong>Resource comparison</strong>${efficiencyLabel}</div></aside>
       </div>
     </article>`;
   }).join('') : '<div class="empty">No guarded runs yet.</div>';

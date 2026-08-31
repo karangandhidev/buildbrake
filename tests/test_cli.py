@@ -361,6 +361,7 @@ class BuildBrakeTests(unittest.TestCase):
                 self.assertEqual(task["mode"], "small")
                 contract = json.loads((root / ".buildbrake/outcome.json").read_text())
                 self.assertIn(prompt, contract["success"])
+                self.assertNotIn(prompt, contract["problem"])
             finally:
                 server.shutdown()
                 server.server_close()
@@ -474,7 +475,7 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertIn("configured target", html)
         self.assertIn("within target", html)
         self.assertIn("over target by", html)
-        self.assertIn("<strong>Outcome: </strong>", html)
+        self.assertIn("<strong>Outcome:</strong>", html)
         self.assertNotIn("new-token budget", html)
         self.assertNotIn("grade-", html)
 

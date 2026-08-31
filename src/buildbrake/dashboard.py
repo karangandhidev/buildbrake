@@ -207,6 +207,7 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
                         receipts.append(item)
                 self.send_bytes(200, "application/json", json_bytes({
                     "contract": contract, "receipts": receipts, "active_run": run_manager.snapshot(),
+                    "project_root": str(root.resolve()),
                     "codex_context_saved": load_codex_thread(root) is not None,
                     "restart_required": backend_source_fingerprint() != startup_fingerprint,
                 }))
@@ -363,10 +364,10 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
             mode = classify_task(prompt) if requested_mode == "auto" else requested_mode
             budget, checkpoint = (3.0, 1.0) if mode == "small" else (15.0, 5.0)
             contract = Contract(
-                problem=f"The requested project change is not implemented: {prompt}",
+                problem="The requested project change has not been implemented yet.",
                 user="Developer requesting the change",
                 current_workaround="Supervise the coding agent and verify the change manually",
-                success=f"The project implements this requested result: {prompt}",
+                success=f"Done when the project implements and verifies: {prompt}",
                 budget_minutes=budget, checkpoint_minutes=checkpoint, created_at=now(),
             )
             failures = preflight(contract, prompt)
