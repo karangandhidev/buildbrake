@@ -133,6 +133,7 @@
     textarea::placeholder, input::placeholder { color: #908d84; }
     .primary { border-color: #315f8d; background: #315f8d; color: #fff; box-shadow: none; }
     button { border-color: #aaa89f; border-radius: 3px; background: #f6f5f1; color: #292824; transition: background .12s, border-color .12s; }
+    button:not(.primary):not(.proved-button):not(.not-proved-button) { font-family: inherit; font-size: 1rem; font-weight: 700; line-height: normal; }
     button:hover { border-color: #77746c; background: #eae9e3; filter: none; transform: none; }
     button:focus-visible, summary:focus-visible { outline-color: #315f8d; }
     .command-box, .live-output { border-color: #d0cec6; border-radius: 3px; background: #f0efe9; color: #292824; }
@@ -229,7 +230,7 @@
     <form id="quick-task-form">
       <textarea name="prompt" placeholder="Example: Add color to the Proved and Not proved buttons so they are easy to distinguish" required></textarea>
       <label>Task size<select name="mode"><option value="auto">Auto (recommended)</option><option value="small">Small · strict and low cost</option><option value="standard">Standard · broader work</option></select></label>
-      <div class="task-actions"><button class="primary" type="submit">Check and save</button><button type="button" onclick="clearQuickTaskForm()">Clear</button></div>
+      <div class="task-actions"><button class="primary" type="submit">Check and save</button><button type="button" onclick="clearQuickTask()">Clear task</button></div>
       <div id="quick-result" class="form-result" aria-live="polite"></div>
     </form>
   </section>
@@ -278,6 +279,7 @@ let refreshTimer;
 let savedCodexContext = false;
 let projectRoot = '';
 let pendingEvaluation = null;
+let savedTaskAvailable = false;
 function projectRelative(value) {
   const text = String(value ?? '');
   if (!projectRoot) return text;
@@ -340,6 +342,16 @@ function clearQuickTaskForm() {
   document.querySelector('#quick-result').replaceChildren();
   form.elements.prompt.focus();
 }
+async function clearQuickTask() {
+  const response = await fetch('/api/task', {method: 'DELETE'});
+  if (!response.ok) {
+    document.querySelector('#quick-result').innerHTML = '<span class="bad">Could not clear the saved task.</span>';
+    return;
+  }
+  clearQuickTaskForm();
+  savedTaskAvailable = false;
+  await loadState(false);
+}
 async function copyCommand(button) {
   const command = button.closest('.command-box').querySelector('code').textContent;
   await navigator.clipboard.writeText(command);
@@ -376,7 +388,9 @@ function renderAgentRun(run) {
   const statusClass = run.status === 'completed' ? 'good' : ['failed','stopped'].includes(run.status) ? 'bad' : '';
   const controls = running
     ? `<button class="stop" type="button" onclick="stopAgent()">Stop agent</button>`
-    : `<div><label class="context-choice"><input id="fresh-context" type="checkbox" ${freshContext ? 'checked' : ''}> Start with fresh context</label><button type="button" onclick="runAgent()">Run saved task</button></div>`;
+    : savedTaskAvailable
+      ? `<div><label class="context-choice"><input id="fresh-context" type="checkbox" ${freshContext ? 'checked' : ''}> Start with fresh context</label><button type="button" onclick="runAgent()">Run saved task</button></div>`
+      : '<span class="muted">No saved task</span>';
   const output = run.lines?.length ? `<div class="live-output">${run.lines.map(esc).join('<br>')}</div>` : '';
   const contextStatus = savedCodexContext ? 'saved project context ready' : 'next run starts fresh';
   control.innerHTML = `<div class="live-head"><div><h2>Agent run</h2><span class="${statusClass}">${esc(run.status)}</span> · ${duration(run.elapsed_seconds)}<br><span class="muted">${contextStatus}</span></div>${controls}</div>${output}`;
@@ -443,10 +457,11 @@ async function loadState(populateForm = false) {
   try {
   const response = await fetch('/api/state', {cache: 'no-store'});
   if (!response.ok) throw new Error(`server returned ${response.status}`);
-  const {contract: c, receipts, active_run, project_root, codex_context_saved, restart_required} = await response.json();
+  const {contract: c, receipts, active_run, project_root, codex_context_saved, task_saved, restart_required} = await response.json();
   projectRoot = project_root || '';
   document.querySelector('#project-location').textContent = projectRoot || 'Unknown project';
   savedCodexContext = codex_context_saved === true;
+  savedTaskAvailable = task_saved === true;
   showRestartNotice(restart_required === true);
   const run = active_run || {status:'idle',elapsed_seconds:0,lines:[]};
   renderAgentRun(run);

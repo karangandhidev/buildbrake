@@ -225,6 +225,7 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
                     "contract": contract, "receipts": receipts, "active_run": run_manager.snapshot(),
                     "project_root": str(root.resolve()),
                     "codex_context_saved": load_codex_thread(root) is not None,
+                    "task_saved": (root / STATE_DIR / TASK_FILE).is_file(),
                     "restart_required": backend_source_fingerprint() != startup_fingerprint,
                 }))
                 return
@@ -234,6 +235,15 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
                 self.send_bytes(200, "application/json", json_bytes(status))
                 return
             self.send_bytes(404, "application/json", json_bytes({"error": "not found"}))
+
+        def do_DELETE(self) -> None:
+            path = urlparse(self.path).path
+            if path != "/api/task":
+                self.send_bytes(404, "application/json", json_bytes({"error": "not found"}))
+                return
+            task_path = root / STATE_DIR / TASK_FILE
+            task_path.unlink(missing_ok=True)
+            self.send_bytes(200, "application/json", json_bytes({"deleted": True}))
 
         def do_POST(self) -> None:
             path = urlparse(self.path).path

@@ -302,6 +302,32 @@ class BuildBrakeTests(unittest.TestCase):
                 server.shutdown()
                 server.server_close()
 
+    def test_dashboard_deletes_saved_task_and_reports_it_missing(self):
+        from buildbrake.dashboard import make_server
+
+        with tempfile.TemporaryDirectory() as folder:
+            self.run_cli(
+                folder, "init", "--problem", "waste", "--user", "devs",
+                "--workaround", "manual", "--success", "visible result",
+            )
+            task_path = Path(folder) / ".buildbrake/task.json"
+            task_path.write_text('{"prompt": "temporary"}\n')
+            server = make_server(Path(folder), "127.0.0.1", 0)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                request = urllib.request.Request(
+                    f"http://127.0.0.1:{server.server_port}/api/task", method="DELETE",
+                )
+                with urllib.request.urlopen(request) as response:
+                    self.assertEqual(response.status, 200)
+                self.assertFalse(task_path.exists())
+                with urllib.request.urlopen(f"http://127.0.0.1:{server.server_port}/api/state") as response:
+                    self.assertFalse(json.load(response)["task_saved"])
+            finally:
+                server.shutdown()
+                server.server_close()
+
     def test_dashboard_preflights_and_saves_task(self):
         from buildbrake.dashboard import make_server
 
@@ -508,9 +534,12 @@ class BuildBrakeTests(unittest.TestCase):
         html = dashboard_html().decode()
         self.assertIn('id="project-location"', html)
         self.assertIn("document.querySelector('#project-location').textContent = projectRoot", html)
-        self.assertIn('onclick="clearQuickTaskForm()">Clear</button>', html)
+        self.assertIn('onclick="clearQuickTask()">Clear task</button>', html)
         self.assertIn("form.reset();", html)
         self.assertIn("clearQuickTaskForm();\n  await loadState(false);", html)
+        self.assertIn("fetch('/api/task', {method: 'DELETE'})", html)
+        self.assertIn("savedTaskAvailable = task_saved === true", html)
+        self.assertIn("No saved task", html)
 
     def test_dashboard_uses_cancellable_in_page_outcome_dialog(self):
         from buildbrake.dashboard import dashboard_html
