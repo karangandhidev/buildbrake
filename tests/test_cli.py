@@ -681,6 +681,18 @@ class BuildBrakeTests(unittest.TestCase):
             ["codex", "exec", "resume", "--json", "thread-123", "do more"],
         )
 
+    def test_codex_command_can_lower_reasoning_effort_for_small_tasks(self):
+        from buildbrake.cli import build_codex_command
+
+        command = build_codex_command(
+            "codex", Path("/tmp/project"), "small change", "workspace-write", None, "low",
+        )
+        self.assertEqual(command[:4], ["codex", "exec", "-c", 'model_reasoning_effort="low"'])
+        resumed = build_codex_command(
+            "codex", Path("/tmp/project"), "small follow-up", "workspace-write", "thread-123", "low",
+        )
+        self.assertEqual(resumed[4:7], ["resume", "--json", "thread-123"])
+
     def test_codex_thread_state_is_project_local_and_validated(self):
         from buildbrake.cli import codex_thread_path, load_codex_thread, save_codex_thread
 

@@ -82,11 +82,13 @@ def save_codex_thread(root: Path, thread_id: str) -> None:
 
 def build_codex_command(
     codex: str, root: Path, prompt: str, sandbox: str, thread_id: str | None,
+    reasoning_effort: str | None = None,
 ) -> list[str]:
+    effort_options = ["-c", f'model_reasoning_effort="{reasoning_effort}"'] if reasoning_effort else []
     if thread_id:
-        return [codex, "exec", "resume", "--json", thread_id, prompt]
+        return [codex, "exec", *effort_options, "resume", "--json", thread_id, prompt]
     return [
-        codex, "exec", "--json", "--color", "never", "--sandbox", sandbox,
+        codex, "exec", *effort_options, "--json", "--color", "never", "--sandbox", sandbox,
         "--cd", str(root), prompt,
     ]
 
@@ -692,8 +694,10 @@ def run_agent(args: argparse.Namespace) -> int:
         f"{manifest_context}"
     )
     thread_id = None if getattr(args, "fresh", False) else load_codex_thread(root)
-    command = build_codex_command(codex, root, guarded_prompt, args.sandbox, thread_id)
+    reasoning_effort = "low" if task_mode == "small" else None
+    command = build_codex_command(codex, root, guarded_prompt, args.sandbox, thread_id, reasoning_effort)
     print(f"Codex context: {'reusing project thread ' + thread_id if thread_id else 'starting a fresh project thread'}")
+    print(f"Reasoning effort: {reasoning_effort or 'user default'}")
     forwarded = argparse.Namespace(
         directory=str(root), command=command, no_checkpoints=args.no_checkpoints,
         child_stdin=subprocess.DEVNULL,
@@ -705,6 +709,7 @@ def run_agent(args: argparse.Namespace) -> int:
             "verification_command": args.verify or saved_task.get("verification_command") or None,
             "task_mode": task_mode,
             "thread_reused": thread_id is not None,
+            "agent_reasoning_effort": reasoning_effort or "user_default",
         },
         scope_limits=limits,
     )

@@ -328,7 +328,7 @@ async function loadState(populateForm = false) {
           <div class="run-primary-meta">
             <div><strong>${isAgent ? 'Codex thread' : 'Run type'}</strong>${isAgent ? `${esc(r.agent_events?.thread_id || '—')} · ${r.thread_reused ? 'reused' : 'fresh'}` : 'local command'}</div>
             <div><strong>Runtime</strong>${duration(r.elapsed_seconds)}</div>
-            <div><strong>Files changed</strong>${r.changed_files.length}${r.task_mode ? ` · ${esc(r.task_mode)} mode` :''}<br>${changedFiles}</div>
+            <div><strong>Files changed</strong>${r.changed_files.length}${r.task_mode ? ` · ${esc(r.task_mode)} mode · ${esc(r.agent_reasoning_effort === 'user_default' ? 'default' : r.agent_reasoning_effort || 'default')} reasoning` :''}<br>${changedFiles}</div>
             <div><strong>Stopped because</strong>${esc((r.stopping_reason || '—').replaceAll('_',' '))}</div>
           </div>${interpretation}${finding}<div class="decision"><strong>Outcome: </strong>${label}</div>
         </div>
