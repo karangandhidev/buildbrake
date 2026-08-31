@@ -862,6 +862,15 @@ class BuildBrakeTests(unittest.TestCase):
             self.assertIn("Previously useful verification", handoff)
             self.assertNotIn("database.py", handoff)
 
+    def test_agent_is_told_external_verification_will_run_once(self):
+        from buildbrake.cli import agent_verification_instruction
+
+        command = "PYTHONPATH=src python3 -m unittest discover -s tests -v"
+        instruction = agent_verification_instruction(command)
+        self.assertIn(f"run this exact command after the agent exits: {command}", instruction)
+        self.assertIn("Do not run or replace this command yourself", instruction)
+        self.assertEqual(agent_verification_instruction(None), "")
+
     def test_agent_parser_offers_fresh_thread_override(self):
         from buildbrake.cli import build_parser
 

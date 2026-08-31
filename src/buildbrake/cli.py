@@ -709,6 +709,16 @@ def compact_project_handoff(root: Path, prompt: str, mode: str) -> tuple[str, li
     return "\n".join(lines) + "\n", likely_files
 
 
+def agent_verification_instruction(command: object) -> str:
+    if not isinstance(command, str) or not command.strip():
+        return ""
+    return (
+        "BuildBrake verification:\n"
+        f"- BuildBrake will run this exact command after the agent exits: {command.strip()}\n"
+        "- Do not run or replace this command yourself unless a failed edit requires targeted diagnosis.\n"
+    )
+
+
 def preflight(contract: Contract, prompt: str) -> list[str]:
     failures: list[str] = []
     normalized = " ".join(prompt.lower().split())
@@ -811,6 +821,8 @@ def run_agent(args: argparse.Namespace) -> int:
     handoff_context, handoff_files = compact_project_handoff(root, prompt, task_mode) if thread_id is None else ("", [])
     if handoff_files:
         manifest_context = ""
+    verification_command = args.verify or saved_task.get("verification_command") or None
+    verification_context = agent_verification_instruction(verification_command)
     print(f"Task mode: {task_mode}" + (" · aim 4 commands · hard max 6 · max 3 files" if limits else ""))
     guarded_prompt = (
         f"{prompt.strip()}\n\n"
@@ -822,6 +834,7 @@ def run_agent(args: argparse.Namespace) -> int:
         "- Do not explore unrelated files or improvements after the target is proved.\n"
         f"{mode_constraint}"
         f"{handoff_context}"
+        f"{verification_context}"
         f"{manifest_context}"
     )
     reasoning_effort = "low" if task_mode == "small" else None
@@ -839,7 +852,7 @@ def run_agent(args: argparse.Namespace) -> int:
             "agent": "codex",
             "agent_prompt": prompt.strip(),
             "agent_sandbox": args.sandbox,
-            "verification_command": args.verify or saved_task.get("verification_command") or None,
+            "verification_command": verification_command,
             "task_mode": task_mode,
             "thread_reused": thread_id is not None,
             "context_rotation_reason": rotation_reason,
@@ -858,7 +871,7 @@ def run_agent(args: argparse.Namespace) -> int:
     completed_thread = (receipt_data.get("agent_events") or {}).get("thread_id")
     if result == 0 and isinstance(completed_thread, str) and completed_thread:
         save_codex_thread(root, completed_thread)
-    verification = args.verify or saved_task.get("verification_command")
+    verification = verification_command
     if result != 0:
         save_automatic_evaluation(receipt, False, "Agent did not complete successfully.", None)
         return result
