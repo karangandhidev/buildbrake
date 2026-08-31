@@ -45,7 +45,8 @@ buildbrake serve
 On first launch, BuildBrake creates its local state automatically and opens the
 dashboard. Enter one concrete task under **What should the agent do?** and click
 **Check and save**. Use `buildbrake init` only when you want to define the full
-outcome contract from the terminal.
+outcome contract from the terminal. Runtime state stays under `.buildbrake/` and
+is ignored by Git by default, so using BuildBrake does not dirty the project.
 
 Then run a command through BuildBrake:
 

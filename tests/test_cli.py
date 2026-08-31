@@ -127,6 +127,34 @@ class BuildBrakeTests(unittest.TestCase):
             self.assertFalse(initialized_again)
             self.assertEqual(loaded, contract)
 
+    def test_first_dashboard_launch_does_not_dirty_git_project(self):
+        from buildbrake.cli import ensure_contract
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            (root / "README.md").write_text("project\n")
+            subprocess.run(["git", "add", "README.md"], cwd=root, check=True)
+            ensure_contract(root)
+            status = subprocess.run(
+                ["git", "status", "--short"], cwd=root, text=True,
+                capture_output=True, check=True,
+            )
+            self.assertNotIn(".buildbrake", status.stdout)
+            self.assertEqual((root / ".buildbrake/.gitignore").read_text(), "*\n")
+
+    def test_custom_buildbrake_ignore_rules_are_preserved(self):
+        from buildbrake.cli import ensure_state_ignore
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            state = root / ".buildbrake"
+            state.mkdir()
+            ignore = state / ".gitignore"
+            ignore.write_text("receipts/*.log\n!receipts/example.json\n")
+            ensure_state_ignore(root)
+            self.assertEqual(ignore.read_text(), "receipts/*.log\n!receipts/example.json\n")
+
     def test_dashboard_terminal_command_works_without_project_launcher(self):
         from buildbrake.dashboard import dashboard_agent_command
 

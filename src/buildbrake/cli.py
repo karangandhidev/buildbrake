@@ -22,6 +22,8 @@ STATE_DIR = ".buildbrake"
 CONTRACT_FILE = "outcome.json"
 RECEIPTS_DIR = "receipts"
 TASK_FILE = "task.json"
+LEGACY_STATE_IGNORE = "receipts/*.log\n"
+LOCAL_STATE_IGNORE = "*\n"
 
 
 def now() -> str:
@@ -51,16 +53,27 @@ def task_path(root: Path) -> Path:
     return state_path(root) / TASK_FILE
 
 
+def ensure_state_ignore(root: Path) -> None:
+    folder = state_path(root)
+    folder.mkdir(exist_ok=True)
+    ignore_path = folder / ".gitignore"
+    existing = ignore_path.read_text() if ignore_path.exists() else None
+    if existing is None or existing == LEGACY_STATE_IGNORE:
+        ignore_path.write_text(LOCAL_STATE_IGNORE)
+
+
 def save_contract(root: Path, contract: Contract) -> None:
     folder = state_path(root)
     folder.mkdir(exist_ok=True)
     contract_path(root).write_text(json.dumps(asdict(contract), indent=2) + "\n")
-    (folder / ".gitignore").write_text("receipts/*.log\n")
+    ensure_state_ignore(root)
 
 
 def ensure_contract(root: Path) -> tuple[Contract, bool]:
     try:
-        return load_contract(root), False
+        contract = load_contract(root)
+        ensure_state_ignore(root)
+        return contract, False
     except FileNotFoundError:
         contract = Contract(
             problem="No guarded task has been defined yet",
