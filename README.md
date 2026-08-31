@@ -60,6 +60,14 @@ Run a genuine Codex coding-agent session under the same contract and budget:
 buildbrake agent --prompt "Implement the smallest change that proves the target"
 ```
 
+When developing BuildBrake itself, install it once in editable mode:
+
+```bash
+./install.sh --editable
+```
+
+Dashboard HTML changes then appear on browser refresh. Restart `buildbrake serve` only after Python backend changes; reinstalling is not required while the source folder remains in place.
+
 BuildBrake runs a zero-token preflight before Codex starts. It blocks tasks that are vague, too short, or disconnected from the outcome contract. You can check a task without launching anything:
 
 ```bash

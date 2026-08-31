@@ -11,12 +11,25 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 from buildbrake.cli import (
     CONTRACT_FILE, RECEIPTS_DIR, STATE_DIR, TASK_FILE, calculate_efficiency,
     load_codex_thread, parse_codex_events,
 )
+
+
+def relative_finding_paths(root: Path, message: object) -> object:
+    """Keep project-local paths in agent findings concise and portable."""
+    if not isinstance(message, str):
+        return message
+    result = message
+    roots = sorted({str(root), str(root.absolute()), str(root.resolve())}, key=len, reverse=True)
+    for project_root in roots:
+        encoded_root = quote(project_root)
+        result = result.replace(f"{encoded_root}/", "").replace(encoded_root, ".")
+        result = result.replace(f"{project_root}{os.sep}", "").replace(project_root, ".")
+    return result
 
 
 class AgentRunManager:
@@ -199,6 +212,9 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
                         log_path = Path(item.get("log", ""))
                         if item.get("agent") == "codex" and log_path.is_file():
                             item["agent_events"] = parse_codex_events(log_path)
+                            item["agent_events"]["final_message"] = relative_finding_paths(
+                                root, item["agent_events"].get("final_message")
+                            )
                             if item["agent_events"]["changed_files"]:
                                 item["changed_files"] = item["agent_events"]["changed_files"]
                             item["efficiency"] = calculate_efficiency(item)

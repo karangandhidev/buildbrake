@@ -258,7 +258,12 @@ let projectRoot = '';
 function projectRelative(value) {
   const text = String(value ?? '');
   if (!projectRoot) return text;
-  return text.split(`${projectRoot}/`).join('').split(projectRoot).join('.');
+  const encodedRoot = encodeURI(projectRoot);
+  return text
+    .split(`${encodedRoot}/`).join('')
+    .split(encodedRoot).join('.')
+    .split(`${projectRoot}/`).join('')
+    .split(projectRoot).join('.');
 }
 function showRestartNotice(required) {
   document.querySelector('#restart-notice').hidden = !required;

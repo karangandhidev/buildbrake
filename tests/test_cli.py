@@ -16,6 +16,19 @@ CLI = [sys.executable, "-m", "buildbrake.cli"]
 
 
 class BuildBrakeTests(unittest.TestCase):
+    def test_dashboard_makes_project_paths_in_findings_relative(self):
+        from buildbrake.dashboard import relative_finding_paths
+
+        root = Path("/tmp/example-project")
+        finding = "Changed /tmp/example-project/src/app.py and /tmp/external.txt"
+        self.assertEqual(
+            relative_finding_paths(root, finding),
+            "Changed src/app.py and /tmp/external.txt",
+        )
+        spaced_root = Path("/tmp/example project")
+        encoded = "Changed [app.py](/tmp/example%20project/src/app.py)"
+        self.assertEqual(relative_finding_paths(spaced_root, encoded), "Changed [app.py](src/app.py)")
+
     def run_cli(self, directory, *args):
         return subprocess.run(
             CLI + ["-C", str(directory), *args], cwd=ROOT,
@@ -531,6 +544,13 @@ class BuildBrakeTests(unittest.TestCase):
         )
         self.assertEqual(relative_changed_files(root, []), [])
         self.assertEqual(relative_changed_files(root, None), [])
+
+    def test_dashboard_relativizes_encoded_paths_in_agent_findings(self):
+        from buildbrake.dashboard import dashboard_html
+
+        html = dashboard_html().decode()
+        self.assertIn("const encodedRoot = encodeURI(projectRoot)", html)
+        self.assertIn(".split(`${encodedRoot}/`).join('')", html)
 
     def test_completed_proved_agent_with_no_changes_is_already_satisfied(self):
         from buildbrake.dashboard import receipt_interpretation
