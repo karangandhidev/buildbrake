@@ -792,7 +792,7 @@ class BuildBrakeTests(unittest.TestCase):
             codex_thread_path(first_root).write_text('{"thread_id":"../../unsafe"}')
             self.assertIsNone(load_codex_thread(first_root))
 
-    def test_oversized_or_expensive_codex_threads_are_rotated(self):
+    def test_thread_rotation_compares_reuse_cost_with_observed_fresh_cost(self):
         from buildbrake.cli import codex_thread_rotation_reason
 
         with tempfile.TemporaryDirectory() as folder:
@@ -804,16 +804,20 @@ class BuildBrakeTests(unittest.TestCase):
             def write_receipt(name, total, cached, reused=True):
                 (receipts / name).write_text(json.dumps({
                     "thread_reused": reused,
+                    "task_mode": "small",
                     "agent_events": {
                         "thread_id": thread_id,
                         "usage": {"input_tokens": total, "cached_input_tokens": cached},
                     },
                 }))
 
-            write_receipt("20260831-100000-efficient.json", 220_000, 211_000)
+            write_receipt("20260831-090000-fresh.json", 133_907, 94_976, reused=False)
+            write_receipt("20260831-100000-efficient.json", 415_618, 407_040)
             self.assertIsNone(codex_thread_rotation_reason(root, thread_id))
-            write_receipt("20260831-110000-oversized.json", 319_342, 243_712)
-            self.assertIn("319,342", codex_thread_rotation_reason(root, thread_id))
+            write_receipt("20260831-110000-expensive.json", 295_069, 230_400)
+            reason = codex_thread_rotation_reason(root, thread_id, "small")
+            self.assertIn("64,669 new tokens", reason)
+            self.assertIn("38,931", reason)
 
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
@@ -826,7 +830,7 @@ class BuildBrakeTests(unittest.TestCase):
                     "usage": {"input_tokens": 120_000, "cached_input_tokens": 70_000},
                 },
             }))
-            self.assertIn("50,000 new tokens", codex_thread_rotation_reason(root, "thread-expensive"))
+            self.assertIn("50,000 new tokens", codex_thread_rotation_reason(root, "thread-expensive", "small"))
 
     def test_agent_parser_offers_fresh_thread_override(self):
         from buildbrake.cli import build_parser

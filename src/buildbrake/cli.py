@@ -26,9 +26,8 @@ TASK_FILE = "task.json"
 CODEX_THREAD_FILE = "codex-thread.json"
 LEGACY_STATE_IGNORE = "receipts/*.log\n"
 LOCAL_STATE_IGNORE = "*\n"
-MAX_REUSED_THREAD_INPUT_TOKENS = 300_000
-MAX_REUSED_THREAD_NEW_TOKENS = 30_000
-MAX_RUNS_PER_CODEX_THREAD = 6
+REUSE_COST_MULTIPLIER = 1.25
+TARGET_COST_MULTIPLIER = 1.5
 
 
 def now() -> str:
@@ -83,16 +82,19 @@ def save_codex_thread(root: Path, thread_id: str) -> None:
     }, indent=2) + "\n")
 
 
-def codex_thread_rotation_reason(root: Path, thread_id: str) -> str | None:
-    """Retire a saved thread before its accumulated context becomes expensive."""
+def codex_thread_rotation_reason(root: Path, thread_id: str, next_mode: str | None = None) -> str | None:
+    """Retire a thread only when measured reuse cost exceeds a fresh-run estimate."""
     receipts = state_path(root) / RECEIPTS_DIR
     matching: list[dict[str, object]] = []
+    all_agent_receipts: list[dict[str, object]] = []
     for path in sorted(receipts.glob("*.json"), reverse=True) if receipts.exists() else []:
         try:
             receipt = json.loads(path.read_text())
         except (json.JSONDecodeError, OSError):
             continue
         events = receipt.get("agent_events") or {}
+        if isinstance(events, dict) and events.get("usage"):
+            all_agent_receipts.append(receipt)
         if isinstance(events, dict) and events.get("thread_id") == thread_id:
             matching.append(receipt)
     if not matching:
@@ -104,12 +106,39 @@ def codex_thread_rotation_reason(root: Path, thread_id: str) -> str | None:
     total_tokens = int(usage.get("input_tokens") or 0)
     cached_tokens = int(usage.get("cached_input_tokens") or 0)
     new_tokens = max(0, total_tokens - cached_tokens)
-    if total_tokens >= MAX_REUSED_THREAD_INPUT_TOKENS:
-        return f"saved context reached {total_tokens:,} input tokens"
-    if latest.get("thread_reused") is True and new_tokens >= MAX_REUSED_THREAD_NEW_TOKENS:
-        return f"last reuse required {new_tokens:,} new tokens"
-    if len(matching) >= MAX_RUNS_PER_CODEX_THREAD:
-        return f"saved context completed {len(matching)} runs"
+    if latest.get("thread_reused") is not True:
+        return None
+    mode = next_mode if next_mode in RESOURCE_TARGETS else latest.get("task_mode")
+    mode = mode if mode in RESOURCE_TARGETS else "standard"
+    fresh_costs: list[int] = []
+    for receipt in all_agent_receipts:
+        if receipt.get("thread_reused") is not False or receipt.get("task_mode") != mode:
+            continue
+        receipt_events = receipt.get("agent_events") or {}
+        receipt_usage = receipt_events.get("usage") if isinstance(receipt_events, dict) else {}
+        if not isinstance(receipt_usage, dict):
+            continue
+        receipt_total = int(receipt_usage.get("input_tokens") or 0)
+        receipt_cached = int(receipt_usage.get("cached_input_tokens") or 0)
+        fresh_costs.append(max(0, receipt_total - receipt_cached))
+    fresh_costs.sort()
+    if fresh_costs:
+        middle = len(fresh_costs) // 2
+        fresh_estimate = (
+            fresh_costs[middle] if len(fresh_costs) % 2
+            else (fresh_costs[middle - 1] + fresh_costs[middle]) // 2
+        )
+    else:
+        fresh_estimate = int(RESOURCE_TARGETS[mode]["new_tokens"])
+    rotation_threshold = max(
+        int(fresh_estimate * REUSE_COST_MULTIPLIER),
+        int(RESOURCE_TARGETS[mode]["new_tokens"] * TARGET_COST_MULTIPLIER),
+    )
+    if new_tokens >= rotation_threshold:
+        return (
+            f"last reuse cost {new_tokens:,} new tokens; "
+            f"fresh {mode} estimate is {fresh_estimate:,}"
+        )
     return None
 
 
@@ -731,7 +760,7 @@ def run_agent(args: argparse.Namespace) -> int:
         f"{manifest_context}"
     )
     saved_thread_id = None if getattr(args, "fresh", False) else load_codex_thread(root)
-    rotation_reason = codex_thread_rotation_reason(root, saved_thread_id) if saved_thread_id else None
+    rotation_reason = codex_thread_rotation_reason(root, saved_thread_id, task_mode) if saved_thread_id else None
     thread_id = None if rotation_reason else saved_thread_id
     reasoning_effort = "low" if task_mode == "small" else None
     command = build_codex_command(codex, root, guarded_prompt, args.sandbox, thread_id, reasoning_effort)
