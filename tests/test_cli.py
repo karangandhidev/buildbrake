@@ -487,6 +487,7 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertIn("saved project context ready", html)
         self.assertIn("fresh avg →", html)
         self.assertIn("reused avg new tokens", html)
+        self.assertIn("context-reused runs", html)
 
     def test_dashboard_orders_receipt_metadata_for_review(self):
         from buildbrake.dashboard import dashboard_html

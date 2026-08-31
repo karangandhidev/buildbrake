@@ -65,6 +65,7 @@
     .metric { border: 1px solid rgba(255,255,255,.07); background: linear-gradient(145deg, #171c27, #10141d); border-radius: 16px; padding: 20px; box-shadow: 0 12px 35px rgba(0,0,0,.18); }
     .metric b { display: block; font-size: 2rem; letter-spacing: -.04em; margin-bottom: 4px; }
     .metric span { color: #929bab; }
+    .metric small { display: block; margin-top: 8px; color: #77746c; font-size: .72rem; line-height: 1.4; }
     .runs { display: grid; gap: 16px; }
     .run { border: 1px solid rgba(255,255,255,.08); background: rgba(16,19,27,.86); border-radius: 18px; padding: 24px; box-shadow: 0 14px 42px rgba(0,0,0,.18); transition: transform .2s, border-color .2s; }
     .run:hover { transform: translateY(-2px); border-color: rgba(112,224,155,.2); }
@@ -410,12 +411,12 @@ async function loadState(populateForm = false) {
   const reusedAverage = averageNewTokens(reusedRuns);
   const contextComparison = freshAverage != null && reusedAverage != null
     ? `${freshAverage.toLocaleString()} fresh avg → ${reusedAverage.toLocaleString()} reused avg new tokens`
-    : reusedRuns.length ? `${reusedRuns.length} reused run${reusedRuns.length === 1 ? '' : 's'} recorded` : 'comparison begins after a reused run';
+    : 'Fresh vs reused token comparison appears after both kinds of runs';
   document.querySelector('#summary').innerHTML = `
     <div class="metric"><b>${receipts.length}</b><span>guarded runs</span></div>
     <div class="metric"><b>${duration(total)}</b><span>total runtime</span></div>
     <div class="metric"><b>${proved}</b><span>outcomes proved</span></div>
-    <div class="metric"><b>${reusedRuns.length}</b><span>${contextComparison}</span></div>`;
+    <div class="metric"><b>${reusedRuns.length}</b><span>context-reused runs</span><small>${contextComparison}</small></div>`;
   const runsElement = document.querySelector('#runs');
   const openFindings = new Set(
     [...runsElement.querySelectorAll('.run details[open]')].map(details => details.closest('.run')?.dataset.receipt)
