@@ -82,7 +82,9 @@ def save_codex_thread(root: Path, thread_id: str) -> None:
     }, indent=2) + "\n")
 
 
-def codex_thread_rotation_reason(root: Path, thread_id: str, next_mode: str | None = None) -> str | None:
+def codex_thread_rotation_reason(
+    root: Path, thread_id: str, next_mode: str | None = None, next_prompt: str | None = None,
+) -> str | None:
     """Retire a thread only when measured reuse cost exceeds a fresh-run estimate."""
     receipts = state_path(root) / RECEIPTS_DIR
     matching: list[dict[str, object]] = []
@@ -111,6 +113,7 @@ def codex_thread_rotation_reason(root: Path, thread_id: str, next_mode: str | No
     mode = next_mode if next_mode in RESOURCE_TARGETS else latest.get("task_mode")
     mode = mode if mode in RESOURCE_TARGETS else "standard"
     fresh_costs: list[int] = []
+    comparable_fresh_costs: list[int] = []
     for receipt in all_agent_receipts:
         if receipt.get("thread_reused") is not False or receipt.get("task_mode") != mode:
             continue
@@ -120,7 +123,12 @@ def codex_thread_rotation_reason(root: Path, thread_id: str, next_mode: str | No
             continue
         receipt_total = int(receipt_usage.get("input_tokens") or 0)
         receipt_cached = int(receipt_usage.get("cached_input_tokens") or 0)
-        fresh_costs.append(max(0, receipt_total - receipt_cached))
+        cost = max(0, receipt_total - receipt_cached)
+        fresh_costs.append(cost)
+        if next_prompt and task_similarity(next_prompt, str(receipt.get("agent_prompt") or "")) >= 0.15:
+            comparable_fresh_costs.append(cost)
+    if comparable_fresh_costs:
+        fresh_costs = comparable_fresh_costs
     fresh_costs.sort()
     if fresh_costs:
         middle = len(fresh_costs) // 2
@@ -654,6 +662,53 @@ def meaningful_words(value: str) -> set[str]:
     return {word for word in words if len(word) >= 4 and word not in PREFLIGHT_STOPWORDS}
 
 
+def task_similarity(first: str, second: str) -> float:
+    first_words, second_words = meaningful_words(first), meaningful_words(second)
+    union = first_words | second_words
+    return len(first_words & second_words) / len(union) if union else 0.0
+
+
+def compact_project_handoff(root: Path, prompt: str, mode: str) -> tuple[str, list[str]]:
+    """Carry a few proven, task-relevant file hints into a fresh thread."""
+    candidates: list[tuple[float, dict[str, object]]] = []
+    for path in receipt_files(root):
+        try:
+            receipt = json.loads(path.read_text())
+        except (json.JSONDecodeError, OSError):
+            continue
+        evaluation = receipt.get("evaluation") or {}
+        if not isinstance(evaluation, dict) or evaluation.get("proved_success") is not True:
+            continue
+        similarity = task_similarity(prompt, str(receipt.get("agent_prompt") or ""))
+        if similarity >= 0.15:
+            candidates.append((similarity, receipt))
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    likely_files: list[str] = []
+    verification_commands: list[str] = []
+    for _, receipt in candidates[:3]:
+        for value in receipt.get("changed_files") or []:
+            path = Path(str(value))
+            try:
+                relative = str(path.resolve().relative_to(root.resolve())) if path.is_absolute() else str(path)
+            except ValueError:
+                continue
+            if relative not in likely_files and (root / relative).is_file():
+                likely_files.append(relative)
+        verification = receipt.get("verification_command")
+        if isinstance(verification, str) and verification and verification not in verification_commands:
+            verification_commands.append(verification)
+    likely_files = likely_files[:5]
+    if not likely_files and not verification_commands:
+        return "", []
+    lines = ["Compact project handoff from similar proved runs:"]
+    if likely_files:
+        lines.append("- Likely relevant files: " + ", ".join(likely_files))
+    if verification_commands:
+        lines.append("- Previously useful verification: " + verification_commands[0])
+    lines.append("- Treat these as starting hints only; inspect the current code before editing.")
+    return "\n".join(lines) + "\n", likely_files
+
+
 def preflight(contract: Contract, prompt: str) -> list[str]:
     failures: list[str] = []
     normalized = " ".join(prompt.lower().split())
@@ -747,6 +802,15 @@ def run_agent(args: argparse.Namespace) -> int:
         if task_mode == "small" else ""
     )
     manifest_context = "Known project files:\n" + "\n".join(f"- {path}" for path in manifest) + "\n" if manifest else ""
+    saved_thread_id = None if getattr(args, "fresh", False) else load_codex_thread(root)
+    rotation_reason = (
+        codex_thread_rotation_reason(root, saved_thread_id, task_mode, prompt)
+        if saved_thread_id else None
+    )
+    thread_id = None if rotation_reason else saved_thread_id
+    handoff_context, handoff_files = compact_project_handoff(root, prompt, task_mode) if thread_id is None else ("", [])
+    if handoff_files:
+        manifest_context = ""
     print(f"Task mode: {task_mode}" + (" · aim 4 commands · hard max 6 · max 3 files" if limits else ""))
     guarded_prompt = (
         f"{prompt.strip()}\n\n"
@@ -757,11 +821,9 @@ def run_agent(args: argparse.Namespace) -> int:
         "- Keep context usage small: inspect targeted sections, do not dump whole files, and cap command output.\n"
         "- Do not explore unrelated files or improvements after the target is proved.\n"
         f"{mode_constraint}"
+        f"{handoff_context}"
         f"{manifest_context}"
     )
-    saved_thread_id = None if getattr(args, "fresh", False) else load_codex_thread(root)
-    rotation_reason = codex_thread_rotation_reason(root, saved_thread_id, task_mode) if saved_thread_id else None
-    thread_id = None if rotation_reason else saved_thread_id
     reasoning_effort = "low" if task_mode == "small" else None
     command = build_codex_command(codex, root, guarded_prompt, args.sandbox, thread_id, reasoning_effort)
     if rotation_reason:
@@ -781,6 +843,7 @@ def run_agent(args: argparse.Namespace) -> int:
             "task_mode": task_mode,
             "thread_reused": thread_id is not None,
             "context_rotation_reason": rotation_reason,
+            "handoff_files": handoff_files,
             "agent_reasoning_effort": reasoning_effort or "user_default",
         },
         scope_limits=limits,

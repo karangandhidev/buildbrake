@@ -832,6 +832,36 @@ class BuildBrakeTests(unittest.TestCase):
             }))
             self.assertIn("50,000 new tokens", codex_thread_rotation_reason(root, "thread-expensive", "small"))
 
+    def test_compact_handoff_uses_files_from_similar_proved_tasks_only(self):
+        from buildbrake.cli import compact_project_handoff
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "src").mkdir()
+            (root / "src/dashboard.html").write_text("dashboard")
+            receipts = root / ".buildbrake/receipts"
+            receipts.mkdir(parents=True)
+            (receipts / "proved.json").write_text(json.dumps({
+                "agent_prompt": "Adjust dashboard button font size and weight",
+                "task_mode": "small",
+                "changed_files": [str(root / "src/dashboard.html")],
+                "evaluation": {"proved_success": True},
+                "verification_command": "python3 -m unittest tests.test_dashboard",
+            }))
+            (receipts / "unrelated.json").write_text(json.dumps({
+                "agent_prompt": "Refactor database migration engine",
+                "task_mode": "small",
+                "changed_files": ["src/database.py"],
+                "evaluation": {"proved_success": True},
+            }))
+            handoff, files = compact_project_handoff(
+                root, "Make every dashboard button use the same font weight and size", "small",
+            )
+            self.assertEqual(files, ["src/dashboard.html"])
+            self.assertIn("Likely relevant files: src/dashboard.html", handoff)
+            self.assertIn("Previously useful verification", handoff)
+            self.assertNotIn("database.py", handoff)
+
     def test_agent_parser_offers_fresh_thread_override(self):
         from buildbrake.cli import build_parser
 
