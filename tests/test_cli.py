@@ -37,6 +37,8 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertIn("/api/agent/stop", html)
         self.assertIn('<section id="agent-control"', html)
         self.assertNotIn('<details id="agent-control"', html)
+        self.assertIn('id="fresh-context"', html)
+        self.assertIn("JSON.stringify({fresh})", html)
 
     def test_dashboard_live_terminal_refresh_and_scrolling(self):
         html = (ROOT / "src/buildbrake/static/index.html").read_text()
@@ -92,6 +94,22 @@ class BuildBrakeTests(unittest.TestCase):
             while manager.snapshot()["status"] in ("running", "stopping") and time.time() < deadline:
                 time.sleep(0.02)
             self.assertEqual(manager.snapshot()["status"], "stopped")
+
+    def test_agent_run_manager_can_request_fresh_context(self):
+        from buildbrake.dashboard import AgentRunManager
+
+        with tempfile.TemporaryDirectory() as folder, \
+                patch("buildbrake.dashboard.subprocess.Popen") as popen, \
+                patch("buildbrake.dashboard.threading.Thread.start"):
+            process = Mock()
+            process.poll.return_value = None
+            popen.return_value = process
+            manager = AgentRunManager(Path(folder))
+            (Path(folder) / ".buildbrake").mkdir()
+            (Path(folder) / ".buildbrake/task.json").write_text("{}")
+            started, _ = manager.start(fresh=True)
+            self.assertTrue(started)
+            self.assertEqual(popen.call_args.args[0][-1], "--fresh")
 
     def test_dashboard_spaces_receipts_heading_from_first_card(self):
         html = (ROOT / "src/buildbrake/static/index.html").read_text()

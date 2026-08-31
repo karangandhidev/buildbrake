@@ -40,6 +40,8 @@
     .live-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
     .live-output { max-height: 320px; overflow: auto; background: #080b0f; border-radius: 10px; padding: 14px; margin-top: 14px; font-family: ui-monospace, SFMono-Regular, monospace; font-size: .82rem; line-height: 1.5; }
     .stop { border-color: #7d3939; color: #ff8a82; }
+    .context-choice { display: inline-flex; align-items: center; gap: 8px; margin-right: 8px; color: #aab2c0; }
+    .context-choice input { display: inline-block; width: auto; margin: 0; accent-color: #70e09b; }
     .restart-notice { border: 1px solid rgba(244,197,106,.45); background: rgba(244,197,106,.1); color: #f7d58e; border-radius: 14px; padding: 16px 18px; margin-bottom: 20px; line-height: 1.5; }
     .restart-notice code { display: inline-block; margin: 8px 8px 0 0; padding: 7px 10px; border-radius: 8px; background: #090c10; color: #f4f6fb; user-select: all; }
     .field strong { display: block; color: #838c9d; font-size: .75rem; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 8px; }
@@ -154,7 +156,10 @@ function savedTaskResult(data) {
   return `<span class="good">Task passed and was saved.</span>${data.mode ? `<div>${esc(data.mode)} mode · ${data.budget_minutes} minute configured target</div>` : ''}${verification}<button class="primary" type="button" onclick="runAgent()">Run task</button><details class="terminal-alternative"><summary>Terminal alternative</summary><div class="command-box"><code>${esc(data.command)}</code><button type="button" onclick="copyCommand(this)">Copy command</button></div></details>`;
 }
 async function runAgent() {
-  const response = await fetch('/api/agent/start', {method:'POST'});
+  const fresh = document.querySelector('#fresh-context')?.checked === true;
+  const response = await fetch('/api/agent/start', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({fresh})
+  });
   const data = await response.json();
   if (!response.ok) { alert(data.message || 'Could not start agent.'); return; }
   await loadState(false);
@@ -167,6 +172,7 @@ async function stopAgent() {
 }
 function renderAgentRun(run) {
   const control = document.querySelector('#agent-control');
+  const freshContext = document.querySelector('#fresh-context')?.checked === true;
   const previousOutput = document.querySelector('#agent-control .live-output');
   const previousScrollTop = previousOutput?.scrollTop || 0;
   const wasAtBottom = !previousOutput || previousOutput.scrollHeight - previousOutput.clientHeight - previousScrollTop <= 2;
@@ -174,7 +180,7 @@ function renderAgentRun(run) {
   const statusClass = run.status === 'completed' ? 'good' : ['failed','stopped'].includes(run.status) ? 'bad' : '';
   const controls = running
     ? `<button class="stop" type="button" onclick="stopAgent()">Stop agent</button>`
-    : `<button type="button" onclick="runAgent()">Run saved task</button>`;
+    : `<div><label class="context-choice"><input id="fresh-context" type="checkbox" ${freshContext ? 'checked' : ''}> Start with fresh context</label><button type="button" onclick="runAgent()">Run saved task</button></div>`;
   const output = run.lines?.length ? `<div class="live-output">${run.lines.map(esc).join('<br>')}</div>` : '';
   control.innerHTML = `<div class="live-head"><div><h2>Agent run</h2><span class="${statusClass}">${esc(run.status)}</span> · ${duration(run.elapsed_seconds)}</div>${controls}</div>${output}`;
   const nextOutput = document.querySelector('#agent-control .live-output');

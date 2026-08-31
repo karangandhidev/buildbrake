@@ -38,7 +38,7 @@ class AgentRunManager:
                 "exit_code": self.exit_code, "lines": self.lines[-80:],
             }
 
-    def start(self, command: list[str] | None = None) -> tuple[bool, str]:
+    def start(self, command: list[str] | None = None, fresh: bool = False) -> tuple[bool, str]:
         with self.lock:
             if self.process is not None and self.process.poll() is None:
                 return False, "an agent is already running"
@@ -47,6 +47,8 @@ class AgentRunManager:
                 return False, "save a task before starting the agent"
             if command is None:
                 command = [sys.executable, "-m", "buildbrake.cli", "-C", str(self.root), "agent", "--no-checkpoints"]
+                if fresh:
+                    command.append("--fresh")
             self.status = "running"
             self.started_at = time.time()
             self.finished_at = None
@@ -215,7 +217,11 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
                 self.save_quick_task()
                 return
             if path == "/api/agent/start":
-                started, message = run_manager.start()
+                body = self.read_json_body() if self.headers.get("Content-Length", "0") != "0" else {}
+                if body is None or not isinstance(body.get("fresh", False), bool):
+                    self.send_bytes(400, "application/json", json_bytes({"error": "fresh must be boolean"}))
+                    return
+                started, message = run_manager.start(fresh=body.get("fresh", False))
                 self.send_bytes(200 if started else 409, "application/json", json_bytes({"started": started, "message": message}))
                 return
             if path == "/api/agent/stop":
