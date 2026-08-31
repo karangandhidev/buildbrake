@@ -502,6 +502,27 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertIn("reused avg new tokens", html)
         self.assertIn("context-reused runs", html)
 
+    def test_dashboard_shows_project_location_and_can_clear_quick_task(self):
+        from buildbrake.dashboard import dashboard_html
+
+        html = dashboard_html().decode()
+        self.assertIn('id="project-location"', html)
+        self.assertIn("document.querySelector('#project-location').textContent = projectRoot", html)
+        self.assertIn('onclick="clearQuickTaskForm()">Clear</button>', html)
+        self.assertIn("form.reset();", html)
+        self.assertIn("clearQuickTaskForm();\n  await loadState(false);", html)
+
+    def test_dashboard_uses_cancellable_in_page_outcome_dialog(self):
+        from buildbrake.dashboard import dashboard_html
+
+        html = dashboard_html().decode()
+        self.assertIn('id="evaluation-dialog"', html)
+        self.assertIn("document.querySelector('#evaluation-dialog').showModal()", html)
+        self.assertNotIn("window.prompt(", html)
+        cancel = html[html.index('function cancelEvaluation()'):html.index('async function saveEvaluation()')]
+        self.assertNotIn("fetch(", cancel)
+        self.assertIn("resetEvaluationDialog();", cancel)
+
     def test_dashboard_orders_receipt_metadata_for_review(self):
         from buildbrake.dashboard import dashboard_html
 

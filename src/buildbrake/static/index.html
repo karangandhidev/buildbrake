@@ -196,6 +196,18 @@
     .command-box { align-items: stretch; padding: 0; overflow: hidden; }
     .command-box code { min-width: 0; padding: 12px 14px 16px; line-height: 1.55; scrollbar-gutter: stable; }
     .command-box button { flex: 0 0 auto; align-self: stretch; margin: 0; border-width: 0 0 0 1px; border-radius: 0; white-space: nowrap; }
+    .project-location { margin: -2px 0 18px; color: #65635c; font-size: .8rem; }
+    .project-location code { display: inline-block; margin-left: 5px; color: #292824; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+    .task-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .task-actions button { margin-top: 16px; }
+    dialog { width: min(520px, calc(100% - 32px)); border: 1px solid #aaa89f; border-radius: 4px; padding: 0; background: #fff; color: #22221f; box-shadow: 0 24px 80px rgba(34,34,31,.25); }
+    dialog::backdrop { background: rgba(28,28,25,.48); backdrop-filter: blur(2px); }
+    .evaluation-modal { padding: 24px; }
+    .evaluation-modal h2 { margin: 0 0 8px; color: #292824; font-size: 1.05rem; letter-spacing: 0; text-transform: none; }
+    .evaluation-modal p { margin: 0 0 18px; color: #65635c; line-height: 1.5; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+    .modal-actions button { margin: 0; }
+    .modal-error { min-height: 1.3em; margin-top: 10px; color: #a23f38; }
   </style>
 </head>
 <body>
@@ -213,10 +225,11 @@
   <div class="content">
   <section class="new-task quick-task">
     <h2>What should the agent do?</h2>
+    <div class="project-location">BuildBrake is running in <code id="project-location">Loading project…</code></div>
     <form id="quick-task-form">
       <textarea name="prompt" placeholder="Example: Add color to the Proved and Not proved buttons so they are easy to distinguish" required></textarea>
       <label>Task size<select name="mode"><option value="auto">Auto (recommended)</option><option value="small">Small · strict and low cost</option><option value="standard">Standard · broader work</option></select></label>
-      <button class="primary" type="submit">Check and save</button>
+      <div class="task-actions"><button class="primary" type="submit">Check and save</button><button type="button" onclick="clearQuickTaskForm()">Clear</button></div>
       <div id="quick-result" class="form-result" aria-live="polite"></div>
     </form>
   </section>
@@ -246,6 +259,15 @@
   <footer>Completed runs appear here automatically.</footer>
   </div>
   </div>
+  <dialog id="evaluation-dialog" aria-labelledby="evaluation-title">
+    <div class="evaluation-modal">
+      <h2 id="evaluation-title">Record outcome</h2>
+      <p id="evaluation-question"></p>
+      <label>What evidence supports this decision?<textarea id="evaluation-evidence" placeholder="Describe what you checked or observed"></textarea></label>
+      <div id="evaluation-error" class="modal-error" aria-live="polite"></div>
+      <div class="modal-actions"><button type="button" onclick="cancelEvaluation()">Cancel</button><button id="save-evaluation" class="primary" type="button" onclick="saveEvaluation()">Save outcome</button></div>
+    </div>
+  </dialog>
 </main>
 <script>
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -255,6 +277,7 @@ const IDLE_REFRESH_MS = 30000;
 let refreshTimer;
 let savedCodexContext = false;
 let projectRoot = '';
+let pendingEvaluation = null;
 function projectRelative(value) {
   const text = String(value ?? '');
   if (!projectRoot) return text;
@@ -273,14 +296,49 @@ async function copyRestartCommand(button) {
   button.textContent = 'Copied';
   setTimeout(() => button.textContent = 'Copy command', 1600);
 }
-async function evaluateRun(id, proved) {
-  const evidence = window.prompt('What evidence supports this decision?') ?? '';
+function resetEvaluationDialog() {
+  pendingEvaluation = null;
+  document.querySelector('#evaluation-evidence').value = '';
+  document.querySelector('#evaluation-error').textContent = '';
+}
+function evaluateRun(id, proved) {
+  pendingEvaluation = {id, proved};
+  document.querySelector('#evaluation-title').textContent = proved ? 'Mark outcome as proved' : 'Mark outcome as not proved';
+  document.querySelector('#evaluation-question').textContent = proved
+    ? 'What did you check that proves the requested result works?'
+    : 'What did you observe that shows the requested result was not proved?';
+  document.querySelector('#evaluation-dialog').showModal();
+  document.querySelector('#evaluation-evidence').focus();
+}
+function cancelEvaluation() {
+  document.querySelector('#evaluation-dialog').close();
+  resetEvaluationDialog();
+}
+async function saveEvaluation() {
+  if (!pendingEvaluation) return;
+  const {id, proved} = pendingEvaluation;
+  const evidence = document.querySelector('#evaluation-evidence').value;
+  const saveButton = document.querySelector('#save-evaluation');
+  saveButton.disabled = true;
   const response = await fetch(`/api/receipts/${encodeURIComponent(id)}/evaluation`, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({proved_success: proved, evidence})
   });
-  if (!response.ok) { alert('Could not save evaluation.'); return; }
+  saveButton.disabled = false;
+  if (!response.ok) { document.querySelector('#evaluation-error').textContent = 'Could not save the outcome. Please try again.'; return; }
+  document.querySelector('#evaluation-dialog').close();
+  resetEvaluationDialog();
   await loadState(false);
+}
+document.querySelector('#evaluation-dialog').addEventListener('cancel', event => {
+  event.preventDefault();
+  cancelEvaluation();
+});
+function clearQuickTaskForm() {
+  const form = document.querySelector('#quick-task-form');
+  form.reset();
+  document.querySelector('#quick-result').replaceChildren();
+  form.elements.prompt.focus();
 }
 async function copyCommand(button) {
   const command = button.closest('.command-box').querySelector('code').textContent;
@@ -299,6 +357,7 @@ async function runAgent() {
   });
   const data = await response.json();
   if (!response.ok) { alert(data.message || 'Could not start agent.'); return; }
+  clearQuickTaskForm();
   await loadState(false);
 }
 async function stopAgent() {
@@ -386,6 +445,7 @@ async function loadState(populateForm = false) {
   if (!response.ok) throw new Error(`server returned ${response.status}`);
   const {contract: c, receipts, active_run, project_root, codex_context_saved, restart_required} = await response.json();
   projectRoot = project_root || '';
+  document.querySelector('#project-location').textContent = projectRoot || 'Unknown project';
   savedCodexContext = codex_context_saved === true;
   showRestartNotice(restart_required === true);
   const run = active_run || {status:'idle',elapsed_seconds:0,lines:[]};
