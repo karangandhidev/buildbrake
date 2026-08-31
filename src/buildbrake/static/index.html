@@ -391,7 +391,7 @@ function renderAgentRun(run) {
     ? `<button class="stop" type="button" onclick="stopAgent()">Stop agent</button>`
     : savedTaskAvailable
       ? `<div><label class="context-choice"><input id="fresh-context" type="checkbox" ${freshContext ? 'checked' : ''}> Start with fresh context</label><button type="button" onclick="runAgent()">Run saved task</button></div>`
-      : '<span class="muted">No saved task</span>';
+      : '<span class="muted">Save a task to start an agent run</span>';
   const output = run.lines?.length ? `<div class="live-output">${run.lines.map(esc).join('<br>')}</div>` : '';
   const contextStatus = contextRotationReason
     ? `saved context reached its efficiency limit; next run starts fresh (${contextRotationReason})`

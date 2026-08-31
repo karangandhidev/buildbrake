@@ -542,7 +542,7 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertIn("clearQuickTaskForm();\n  await loadState(false);", html)
         self.assertIn("fetch('/api/task', {method: 'DELETE'})", html)
         self.assertIn("savedTaskAvailable = task_saved === true", html)
-        self.assertIn("No saved task", html)
+        self.assertIn("Save a task to start an agent run", html)
 
     def test_dashboard_uses_cancellable_in_page_outcome_dialog(self):
         from buildbrake.dashboard import dashboard_html
