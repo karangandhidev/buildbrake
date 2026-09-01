@@ -93,6 +93,20 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertNotIn('<select name="mode">', html)
         self.assertIn('.task-size-option input:checked + span', html)
 
+    def test_task_size_warning_clears_for_blank_auto_and_form_reset(self):
+        html = (ROOT / "src/buildbrake/static/index.html").read_text()
+        self.assertIn("if (!prompt || promptWords.length < 3 || selected === 'auto')", html)
+        clear_form = html[html.index('function clearQuickTaskForm()'):html.index('function updateTaskSizeWarning(form)')]
+        self.assertIn("form.reset();", clear_form)
+        self.assertIn("updateTaskSizeWarning(form);", clear_form)
+
+    def test_terminal_copy_icon_uses_same_smooth_fade_as_thread_copy(self):
+        html = (ROOT / "src/buildbrake/static/index.html").read_text()
+        self.assertIn(".command-box .copy-glyph, .command-box .copy-check { opacity: 1; transition: opacity .2s ease; }", html)
+        self.assertIn(".command-box .copy-check { opacity: 0; }", html)
+        self.assertIn(".command-box button.is-copying .copy-glyph { opacity: 0; }", html)
+        self.assertNotIn(".command-box .copy-check { display: none; }", html)
+
     def test_dashboard_separates_context_decision_from_codex_thread_and_supports_legacy_receipts(self):
         html = (ROOT / "src/buildbrake/static/index.html").read_text()
         self.assertIn("<strong>Context decision</strong>", html)

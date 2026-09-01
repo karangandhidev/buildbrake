@@ -172,7 +172,8 @@
     .run-primary-meta > div { min-width: 0; padding: 13px 14px; background: #fff; line-height: 1.45; overflow-wrap: anywhere; word-break: normal; }
     .copy-thread-button { float: right; margin: 0 4px 0 12px; padding: 4px 6px; line-height: 1; }
     .copy-thread-button svg { display: block; width: 14px; height: 14px; transition: transform .2s ease; }
-    .copy-thread-button .copy-check { opacity: 0; transition: opacity .2s ease; }
+    .copy-thread-button .copy-glyph, .copy-thread-button .copy-check { opacity: 1; transition: opacity .2s ease; }
+    .copy-thread-button .copy-check { opacity: 0; }
     .copy-thread-button.is-copying .copy-glyph { opacity: 0; }
     .copy-thread-button.is-copying .copy-check { opacity: 1; }
     .copy-thread-button.is-copying { position: relative; }
@@ -306,6 +307,7 @@
     .task-size-option:hover span { border-color: #77746c; background: #f3f2ed; }
     .task-size-option input:checked + span { border-color: #315f8d; background: #e8f0f7; color: #173552; box-shadow: inset 0 0 0 1px #315f8d; }
     .task-size-option input:focus-visible + span { outline: 2px solid #315f8d; outline-offset: 2px; }
+    .task-size-warning { margin: 8px 0 0; color: #8a5a12; font-size: .8rem; line-height: 1.4; }
     button { min-height: 46px; transition: background .12s, border-color .12s, filter .12s, transform .12s; }
     button:hover { filter: brightness(.9); }
     button:active { filter: brightness(.78); transform: translateY(1px); }
@@ -325,9 +327,10 @@
     .command-box button { width: 46px; min-height: 0; padding: 0; background: transparent; color: inherit; }
     .command-box button:hover { background: #e5e9ee; filter: none; }
     .command-box button svg { display: block; width: 18px; height: 18px; margin: auto; }
-    .command-box .copy-check { display: none; }
-    .command-box button.is-copying .copy-glyph { display: none; }
-    .command-box button.is-copying .copy-check { display: block; }
+    .command-box .copy-glyph, .command-box .copy-check { opacity: 1; transition: opacity .2s ease; }
+    .command-box .copy-check { opacity: 0; }
+    .command-box button.is-copying .copy-glyph { opacity: 0; }
+    .command-box button.is-copying .copy-check { opacity: 1; }
     footer { margin-top: 56px; }
     @media (max-width: 1050px) { .run-layout { grid-template-columns: 1fr; } .run-resources { border-top: 1px solid var(--line); border-left: 0; } .resource-comparison { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
     @media (max-width: 920px) { main { padding-left: 24px; padding-right: 24px; } .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .resource-comparison { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -357,6 +360,7 @@
         <label class="task-size-option"><input type="radio" name="mode" value="small"><span>Small · strict limits</span></label>
         <label class="task-size-option"><input type="radio" name="mode" value="standard"><span>Standard · broader work</span></label>
       </div></fieldset>
+      <div class="task-size-warning" data-task-size-warning aria-live="polite"></div>
       <div class="task-actions"><button class="primary" type="submit">Check and save</button><button type="button" onclick="clearQuickTask()">Clear task</button></div>
       <div id="quick-result" class="form-result" aria-live="polite"></div>
     </form>
@@ -376,6 +380,7 @@
           <label class="task-size-option"><input type="radio" name="mode" value="small"><span>Small · strict limits</span></label>
           <label class="task-size-option"><input type="radio" name="mode" value="standard"><span>Standard · broader work</span></label>
         </div></fieldset>
+        <div class="task-size-warning" data-task-size-warning aria-live="polite"></div>
         <label class="wide">Task for the agent<textarea name="prompt" required></textarea></label>
         <label class="wide">Verification command <span class="muted">(optional—exit 0 means proved)</span><input name="verification_command" placeholder="python3 -m unittest discover -s tests -v"></label>
       </div>
@@ -473,7 +478,33 @@ function clearQuickTaskForm() {
   const form = document.querySelector('#quick-task-form');
   form.reset();
   document.querySelector('#quick-result').replaceChildren();
+  updateTaskSizeWarning(form);
   form.elements.prompt.focus();
+}
+function updateTaskSizeWarning(form) {
+  const prompt = form.elements.prompt.value.trim().toLowerCase();
+  const selected = form.elements.mode.value;
+  const warning = form.querySelector('[data-task-size-warning]');
+  const promptWords = prompt.match(/[a-z0-9]+/g) || [];
+  if (!prompt || promptWords.length < 3 || selected === 'auto') {
+    warning.textContent = '';
+    return;
+  }
+  const words = new Set(promptWords);
+  const broad = ['redesign', 'application', 'codebase', 'project', 'repository'].some(word => words.has(word)) ||
+    ['complete redesign', 'entire application', 'entire codebase', 'entire project', 'entire repository'].some(phrase => prompt.includes(phrase));
+  const actions = (prompt.match(/\b(add|change|convert|divide|fix|make|match|move|remove|replace|rework|turn|update)\b/g) || []).length;
+  const expected = broad || actions >= 4 ? 'standard' : 'small';
+  warning.textContent = selected === 'small' && expected === 'standard'
+    ? 'Warning: this task looks standard-sized. Choose Standard for broader work.'
+    : selected === 'standard' && expected === 'small'
+      ? 'Warning: this task looks small-sized. Choose Small to keep limits tight.'
+      : '';
+}
+for (const form of document.querySelectorAll('#quick-task-form, #task-form')) {
+  form.addEventListener('input', () => updateTaskSizeWarning(form));
+  form.addEventListener('change', () => updateTaskSizeWarning(form));
+  updateTaskSizeWarning(form);
 }
 async function clearQuickTask() {
   const response = await fetch('/api/task', {method: 'DELETE'});
