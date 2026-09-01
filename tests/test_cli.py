@@ -134,6 +134,15 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertIn("nextOutput.scrollHeight : previousScrollTop", html)
         self.assertIn(".terminal-alternative { max-width: none; width: 100%; }", html)
 
+    def test_refresh_icon_matches_copy_icon_and_animates_only_on_click(self):
+        html = (ROOT / "src/buildbrake/static/index.html").read_text()
+        self.assertIn(".refresh-runs-button { min-height: 0; width: 28px; height: 26px;", html)
+        self.assertIn(".refresh-runs-button svg { display: block; width: 14px; height: 14px; }", html)
+        self.assertIn(".refresh-runs-button.is-refreshing svg", html)
+        self.assertNotIn(".refresh-runs-button:hover svg", html)
+        self.assertIn('onclick="refreshRuns(this)"', html)
+        self.assertIn("async function refreshRuns(button)", html)
+
     def test_dashboard_explains_when_backend_restart_is_required(self):
         from buildbrake.dashboard import backend_source_fingerprint, dashboard_html
 

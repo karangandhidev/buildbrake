@@ -305,9 +305,10 @@
     button:active { filter: brightness(.78); transform: translateY(1px); }
     .primary:hover { border-color: #315f8d; background: #315f8d; color: #fff; box-shadow: 0 3px 10px rgba(49,95,141,.28); }
     .run-task-button, .run-task-button:hover { min-height: 42px; border-color: #43824d; background: #43824d; color: #fff; }
-    .refresh-runs-button { min-height: 42px; height: 42px; padding: 5px 10px; line-height: 1; }
-    .refresh-runs-button svg { display: block; width: 14px; height: 14px; transition: transform .35s ease; }
-    .refresh-runs-button:hover svg, .refresh-runs-button:active svg { transform: rotate(180deg); }
+    .refresh-runs-button { min-height: 0; width: 28px; height: 26px; padding: 4px 6px; line-height: 1; }
+    .refresh-runs-button svg { display: block; width: 14px; height: 14px; }
+    .refresh-runs-button.is-refreshing svg { animation: refresh-spin .4s ease-out; }
+    @keyframes refresh-spin { to { transform: rotate(360deg); } }
     .copy-thread-button { min-height: 0; height: 26px; }
     .runtime-meta { grid-column: 2; grid-row: 1; }
     .context-choice input[type="checkbox"] { appearance: auto; flex: 0 0 auto; width: 17px; height: 17px; min-height: 0; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; accent-color: var(--blue); }
@@ -372,7 +373,7 @@
   <div class="section-head contract-head"><div><h2>Success contract</h2><span class="muted">The outcome and limits this run must satisfy.</span></div></div>
   <section id="contract" class="contract"></section>
   <section id="summary" class="summary"></section>
-  <div class="section-head"><h2>Run receipts</h2><div><span id="last-updated" class="muted"></span><button class="refresh-runs-button" type="button" aria-label="Refresh runs" title="Refresh runs" onclick="loadState(false)"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 0 0-14.9-4L3 10"></path><path d="M3 5v5h5"></path><path d="M4 13a8 8 0 0 0 14.9 4L21 14"></path><path d="M21 19v-5h-5"></path></svg></button></div></div>
+  <div class="section-head"><h2>Run receipts</h2><div><span id="last-updated" class="muted"></span><button class="refresh-runs-button" type="button" aria-label="Refresh runs" title="Refresh runs" onclick="refreshRuns(this)"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 0 0-14.9-4L3 10"></path><path d="M3 5v5h5"></path><path d="M4 13a8 8 0 0 0 14.9 4L21 14"></path><path d="M21 19v-5h-5"></path></svg></button></div></div>
   <div id="runs"></div>
   <footer>Completed runs appear here automatically.</footer>
   </div>
@@ -489,6 +490,16 @@ async function copyThreadId(button) {
     button.classList.remove('is-copying');
     button.setAttribute('aria-label', 'Copy thread ID');
   }, 1600);
+}
+async function refreshRuns(button) {
+  button.classList.remove('is-refreshing');
+  void button.offsetWidth;
+  button.classList.add('is-refreshing');
+  try {
+    await loadState(false);
+  } finally {
+    setTimeout(() => button.classList.remove('is-refreshing'), 400);
+  }
 }
 function savedTaskResult(data) {
   const verification = data.verification_command ? `<div class="muted">Automatic verification: ${esc(data.verification_command)}</div>` : '<div class="muted">Outcome will require human evaluation.</div>';
