@@ -761,9 +761,38 @@ def calculate_efficiency(receipt: dict[str, object]) -> dict[str, object]:
             "status": "within_target" if value <= target else "over_target",
             "percent_over": round(percent_over, 1),
         }
+    diagnosis = None
+    if new_tokens > configured_targets["new_tokens"]:
+        context_decision = str(receipt.get("context_decision") or "")
+        if context_decision == "started_fresh_manually":
+            diagnosis = {
+                "cause": "Manual fresh context rebuilt project understanding",
+                "next_step": "Leave Force fresh context off unless the saved conversation is misleading the agent.",
+            }
+        elif commands > configured_targets["commands"]:
+            diagnosis = {
+                "cause": "Inspection used more commands than this task size targets",
+                "next_step": "Name the exact component or file when known; BuildBrake will also reuse proved file hints.",
+            }
+        elif files == 0:
+            diagnosis = {
+                "cause": "The agent spent above target without producing a file change",
+                "next_step": "Use a concrete observable result and verification command, or inspect the raw finding for a blocker.",
+            }
+        elif context_decision == "started_fresh_automatically":
+            diagnosis = {
+                "cause": "Automatic context rotation required a one-time project rebuild",
+                "next_step": "The next related task should reuse this new thread; compare its new-token count before intervening.",
+            }
+        else:
+            diagnosis = {
+                "cause": "The task stayed within command and file scope but required unusually heavy reasoning",
+                "next_step": "Compare the model benchmark after evaluation; BuildBrake can change models from measured results.",
+            }
     return {
         "mode": mode,
         "comparisons": comparisons,
+        "diagnosis": diagnosis,
         "method": "configured_target_comparison_v1",
     }
 

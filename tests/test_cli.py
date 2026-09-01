@@ -545,6 +545,30 @@ class BuildBrakeTests(unittest.TestCase):
         }
         self.assertEqual(calculate_efficiency(receipt)["comparisons"]["files"]["actual"], 1)
 
+    def test_efficiency_diagnoses_high_usage_with_a_specific_next_step(self):
+        from buildbrake.cli import calculate_efficiency
+
+        manual_fresh = calculate_efficiency({
+            "task_mode": "small", "context_decision": "started_fresh_manually",
+            "elapsed_seconds": 20, "changed_files": ["app.py"],
+            "agent_events": {"usage": {"input_tokens": 30_000}, "commands_started": 2},
+        })
+        self.assertIn("Manual fresh context", manual_fresh["diagnosis"]["cause"])
+        self.assertIn("Force fresh context off", manual_fresh["diagnosis"]["next_step"])
+
+        excessive_discovery = calculate_efficiency({
+            "task_mode": "small", "context_decision": "reused_existing_thread",
+            "elapsed_seconds": 20, "changed_files": ["app.py"],
+            "agent_events": {"usage": {"input_tokens": 30_000}, "commands_started": 5},
+        })
+        self.assertIn("more commands", excessive_discovery["diagnosis"]["cause"])
+
+        efficient = calculate_efficiency({
+            "task_mode": "small", "elapsed_seconds": 20, "changed_files": ["app.py"],
+            "agent_events": {"usage": {"input_tokens": 10_000}, "commands_started": 2},
+        })
+        self.assertIsNone(efficient["diagnosis"])
+
     def test_dashboard_shows_separate_resource_comparisons_and_outcome(self):
         from buildbrake.dashboard import dashboard_html
 
@@ -554,6 +578,7 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertIn("configured target", html)
         self.assertIn("within target", html)
         self.assertIn("over target by", html)
+        self.assertIn("Why usage was high", html)
         self.assertIn("<strong>Outcome:</strong>", html)
         self.assertNotIn("new-token budget", html)
         self.assertNotIn("grade-", html)
@@ -603,7 +628,7 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertIn('<div class="run-layout">', html)
         self.assertIn('<div class="run-primary">', html)
         self.assertIn('<aside class="run-resources"><div><strong>Usage</strong>', html)
-        self.assertIn('<div><strong>Resource comparison</strong>${efficiencyLabel}</div></aside>', html)
+        self.assertIn('<div><strong>Resource comparison</strong>${efficiencyLabel}${costDiagnosis}</div></aside>', html)
         primary = html[html.index('<div class="run-primary-meta">'):html.index('</div>${interpretation}')]
         labels = [
             "<strong>${isAgent ? 'Codex thread' : 'Run type'}</strong>",

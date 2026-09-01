@@ -189,6 +189,8 @@
     .resource-name { color: #77746c; font-size: .7rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
     .resource-values { font: 600 .82rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; }
     .resource-status { font-size: .76rem; }
+    .cost-diagnosis { margin-top: 10px; padding: 12px; border-left: 3px solid #b87928; background: #fff8e8; color: #554326; font-size: .8rem; line-height: 1.45; }
+    .cost-diagnosis strong { display: block; margin-bottom: 3px; color: #3f321e; }
     @media (max-width: 820px) { .resource-comparison { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 680px) { .run-primary-meta, .resource-comparison { grid-template-columns: 1fr; } .decision { flex-wrap: wrap; } .decision-actions { width: 100%; justify-content: flex-end; } .run-head, .run-task, .run-primary, .run-resources { padding-left: 15px; padding-right: 15px; } }
     .contract { display: block; padding: 0; overflow: hidden; }
@@ -564,6 +566,9 @@ async function loadState(populateForm = false) {
           return `<div class="resource-row"><span class="resource-name">${resourceNames[metric]}</span><span class="resource-values">${resourceValue(metric, comparison.actual)} / ${resourceValue(metric, comparison.configured_target)}</span><span class="resource-status">${status}</span></div>`;
         }).join('')}</div>`
       : '—';
+    const costDiagnosis = efficiency?.diagnosis
+      ? `<div class="cost-diagnosis"><strong>Why usage was high</strong>${esc(efficiency.diagnosis.cause)}<br><span class="muted">Next: ${esc(efficiency.diagnosis.next_step)}</span></div>`
+      : '';
     return `<article class="run" data-receipt="${esc(r.id)}">
       <div class="run-head"><span class="run-id">${esc(r.id)}</span><span class="tag ${isAgent ? 'good' : ''}">${type}</span></div>
       <div class="run-task">${esc(command)}</div>
@@ -577,7 +582,7 @@ async function loadState(populateForm = false) {
             <div><strong>Stopped because</strong>${esc((r.stopping_reason || '—').replaceAll('_',' '))}</div>
           </div>${interpretation}${finding}<div class="decision">${label}</div>
         </div>
-        <aside class="run-resources"><div><strong>Usage</strong><span class="usage-value">${usage}</span></div><div><strong>Resource comparison</strong>${efficiencyLabel}</div></aside>
+        <aside class="run-resources"><div><strong>Usage</strong><span class="usage-value">${usage}</span></div><div><strong>Resource comparison</strong>${efficiencyLabel}${costDiagnosis}</div></aside>
       </div>
     </article>`;
   }).join('') : '<div class="empty">No guarded runs yet.</div>';
