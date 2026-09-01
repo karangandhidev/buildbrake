@@ -710,7 +710,7 @@ def compact_project_handoff(root: Path, prompt: str, mode: str) -> tuple[str, li
         lines.append("- Likely relevant files: " + ", ".join(likely_files))
     if verification_commands:
         lines.append("- Previously useful verification: " + verification_commands[0])
-    lines.append("- Treat these as starting hints only; inspect the current code before editing.")
+    lines.append("- Start with these exact files and inspect only relevant sections; do not run project-wide file discovery.")
     return "\n".join(lines) + "\n", likely_files
 
 

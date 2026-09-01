@@ -51,7 +51,8 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertIn('<section id="agent-control"', html)
         self.assertNotIn('<details id="agent-control"', html)
         self.assertIn('id="fresh-context"', html)
-        self.assertIn('class="context-info" tabindex="0" role="img" aria-label="Starts a new Codex conversation without changing project files."', html)
+        self.assertIn('>Force fresh context</label>', html)
+        self.assertIn('aria-label="Manual override. BuildBrake normally chooses the cheaper context automatically.', html)
         self.assertIn('.context-info:hover::after, .context-info:focus::after', html)
         self.assertNotIn('<span class="muted">Starts a new Codex conversation', html)
         self.assertIn("JSON.stringify({fresh})", html)
@@ -557,7 +558,7 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertIn("fetch('/api/task', {method: 'DELETE'})", html)
         self.assertIn("savedTaskAvailable = task_saved === true", html)
         self.assertIn("Save a task to start an agent run", html)
-        self.assertIn("Starts a new Codex conversation without changing project files.", html)
+        self.assertIn("Force fresh context", html)
 
     def test_dashboard_uses_cancellable_in_page_outcome_dialog(self):
         from buildbrake.dashboard import dashboard_html
@@ -905,6 +906,7 @@ class BuildBrakeTests(unittest.TestCase):
             self.assertEqual(files, ["src/dashboard.html"])
             self.assertIn("Likely relevant files: src/dashboard.html", handoff)
             self.assertIn("Previously useful verification", handoff)
+            self.assertIn("do not run project-wide file discovery", handoff)
             self.assertNotIn("database.py", handoff)
 
     def test_agent_is_told_external_verification_will_run_once(self):

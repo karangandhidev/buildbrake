@@ -396,7 +396,7 @@ function renderAgentRun(run) {
   const controls = running
     ? `<button class="stop" type="button" onclick="stopAgent()">Stop agent</button>`
     : savedTaskAvailable
-      ? `<div><span class="context-option"><label class="context-choice"><input id="fresh-context" type="checkbox" ${freshContext ? 'checked' : ''}>Start with fresh context</label><span class="context-info" tabindex="0" role="img" aria-label="Starts a new Codex conversation without changing project files.">i</span></span><button type="button" onclick="runAgent()">Run saved task</button></div>`
+      ? `<div><span class="context-option"><label class="context-choice"><input id="fresh-context" type="checkbox" ${freshContext ? 'checked' : ''}>Force fresh context</label><span class="context-info" tabindex="0" role="img" aria-label="Manual override. BuildBrake normally chooses the cheaper context automatically. This starts a new Codex conversation without changing project files.">i</span></span><button type="button" onclick="runAgent()">Run saved task</button></div>`
       : '<span class="muted">Save a task to start an agent run</span>';
   const output = run.lines?.length ? `<div class="live-output">${run.lines.map(esc).join('<br>')}</div>` : '';
   const contextStatus = contextRotationReason
