@@ -181,12 +181,52 @@ def build_codex_command(
     ]
 
 
-def select_agent_model(task_mode: str, requested: str = "auto") -> str | None:
+def automatic_model_decision(
+    task_mode: str, performance: list[dict[str, object]] | None = None,
+) -> tuple[str | None, str]:
+    if task_mode != "small":
+        return None, "standard task keeps the configured default model"
+    by_model = {str(item.get("model")): item for item in (performance or [])}
+    luna = by_model.get("gpt-5.6-luna")
+    default = by_model.get("user_default")
+    if not luna or int(luna.get("evaluated_runs") or 0) < 3:
+        count = int(luna.get("evaluated_runs") or 0) if luna else 0
+        return "gpt-5.6-luna", f"Luna pilot: {count}/3 evaluated small runs collected"
+    if not default or int(default.get("evaluated_runs") or 0) < 3:
+        return "gpt-5.6-luna", "Luna retained; default-model baseline is not yet large enough"
+
+    luna_proof = float(luna.get("proof_rate") or 0)
+    default_proof = float(default.get("proof_rate") or 0)
+    luna_tokens = int(luna.get("median_new_tokens") or 0)
+    default_tokens = int(default.get("median_new_tokens") or 0)
+    if luna_proof + 0.15 < default_proof:
+        return None, f"default model proved more reliable ({default_proof:.0%} vs {luna_proof:.0%})"
+    if luna_tokens > default_tokens * 1.10 and luna_proof <= default_proof:
+        return None, f"default model used fewer median new tokens ({default_tokens:,} vs {luna_tokens:,})"
+    return "gpt-5.6-luna", f"Luna retained from measured proof and token results ({luna_proof:.0%} proved)"
+
+
+def select_agent_model(
+    task_mode: str, requested: str = "auto", performance: list[dict[str, object]] | None = None,
+) -> str | None:
     if requested == "user-default":
         return None
     if requested != "auto":
         return requested
-    return "gpt-5.6-luna" if task_mode == "small" else None
+    return automatic_model_decision(task_mode, performance)[0]
+
+
+def load_receipts(root: Path) -> list[dict[str, object]]:
+    receipts = state_path(root) / RECEIPTS_DIR
+    results = []
+    for path in sorted(receipts.glob("*.json"), reverse=True) if receipts.exists() else []:
+        try:
+            item = json.loads(path.read_text())
+        except (json.JSONDecodeError, OSError):
+            continue
+        if isinstance(item, dict):
+            results.append(item)
+    return results
 
 
 def model_performance(receipts: list[dict[str, object]]) -> list[dict[str, object]]:
@@ -884,7 +924,15 @@ def run_agent(args: argparse.Namespace) -> int:
     )
     manifest_context = "Known project files:\n" + "\n".join(f"- {path}" for path in manifest) + "\n" if manifest else ""
     saved_thread_id = None if getattr(args, "fresh", False) else load_codex_thread(root)
-    agent_model = select_agent_model(task_mode, getattr(args, "model", "auto"))
+    requested_model = getattr(args, "model", "auto")
+    performance = model_performance(load_receipts(root))
+    agent_model = select_agent_model(task_mode, requested_model, performance)
+    if requested_model == "auto":
+        _, model_decision = automatic_model_decision(task_mode, performance)
+    elif requested_model == "user-default":
+        model_decision = "user requested the configured default model"
+    else:
+        model_decision = f"user explicitly requested {requested_model}"
     saved_thread_model = load_codex_thread_model(root) if saved_thread_id else None
     model_rotation_reason = None
     if saved_thread_id and saved_thread_model != agent_model:
@@ -936,6 +984,7 @@ def run_agent(args: argparse.Namespace) -> int:
         print(f"Codex context: {'reusing project thread ' + thread_id if thread_id else 'starting a fresh project thread'}")
     print(f"Reasoning effort: {reasoning_effort or 'user default'}")
     print(f"Model: {agent_model or 'user default'}")
+    print(f"Model decision: {model_decision}")
     forwarded = argparse.Namespace(
         directory=str(root), command=command, no_checkpoints=args.no_checkpoints,
         child_stdin=subprocess.DEVNULL,
@@ -954,6 +1003,7 @@ def run_agent(args: argparse.Namespace) -> int:
             "handoff_files": handoff_files,
             "agent_reasoning_effort": reasoning_effort or "user_default",
             "agent_model": agent_model or "user_default",
+            "agent_model_decision": model_decision,
         },
         scope_limits=limits,
     )

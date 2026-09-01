@@ -820,7 +820,7 @@ class BuildBrakeTests(unittest.TestCase):
         )
 
     def test_codex_command_can_lower_reasoning_effort_for_small_tasks(self):
-        from buildbrake.cli import build_codex_command, select_agent_model
+        from buildbrake.cli import automatic_model_decision, build_codex_command, select_agent_model
 
         command = build_codex_command(
             "codex", Path("/tmp/project"), "small change", "workspace-write", None, "low",
@@ -837,6 +837,17 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertEqual(select_agent_model("small"), "gpt-5.6-luna")
         self.assertIsNone(select_agent_model("standard"))
         self.assertEqual(select_agent_model("small", "gpt-5.6-terra"), "gpt-5.6-terra")
+        measured = [
+            {"model": "gpt-5.6-luna", "evaluated_runs": 3, "proof_rate": .5, "median_new_tokens": 30_000},
+            {"model": "user_default", "evaluated_runs": 5, "proof_rate": 1, "median_new_tokens": 20_000},
+        ]
+        selected, reason = automatic_model_decision("small", measured)
+        self.assertIsNone(selected)
+        self.assertIn("more reliable", reason)
+        measured[0].update({"proof_rate": 1, "median_new_tokens": 15_000})
+        selected, reason = automatic_model_decision("small", measured)
+        self.assertEqual(selected, "gpt-5.6-luna")
+        self.assertIn("retained", reason)
 
     def test_codex_thread_state_is_project_local_and_validated(self):
         from buildbrake.cli import codex_thread_path, load_codex_thread, load_codex_thread_model, save_codex_thread
