@@ -16,6 +16,31 @@ CLI = [sys.executable, "-m", "buildbrake.cli"]
 
 
 class BuildBrakeTests(unittest.TestCase):
+    def test_model_performance_compares_small_runs_with_medians_and_proof_rate(self):
+        from buildbrake.cli import model_performance
+
+        def receipt(model, tokens, cached, runtime, proved):
+            return {
+                "run_type": "ai_agent", "task_mode": "small", "agent_model": model,
+                "elapsed_seconds": runtime,
+                "agent_events": {"usage": {"input_tokens": tokens, "cached_input_tokens": cached}},
+                "evaluation": {"proved_success": proved},
+            }
+
+        results = model_performance([
+            receipt("gpt-5.6-luna", 20_000, 5_000, 30, True),
+            receipt("gpt-5.6-luna", 40_000, 5_000, 50, False),
+            receipt("gpt-5.6-luna", 200_000, 5_000, 200, True),
+            receipt(None, 30_000, 10_000, 60, True),
+            {"run_type": "ai_agent", "task_mode": "standard"},
+        ])
+        luna = next(item for item in results if item["model"] == "gpt-5.6-luna")
+        self.assertEqual(luna["runs"], 3)
+        self.assertEqual(luna["median_new_tokens"], 35_000)
+        self.assertEqual(luna["median_runtime_seconds"], 50)
+        self.assertEqual(luna["proof_rate"], 0.667)
+        self.assertEqual(next(item for item in results if item["model"] == "user_default")["runs"], 1)
+
     def test_dashboard_makes_project_paths_in_findings_relative(self):
         from buildbrake.dashboard import relative_finding_paths
 

@@ -466,7 +466,7 @@ async function loadState(populateForm = false) {
   try {
   const response = await fetch('/api/state', {cache: 'no-store'});
   if (!response.ok) throw new Error(`server returned ${response.status}`);
-  const {contract: c, receipts, active_run, project_root, codex_context_saved, codex_context_rotation_reason, task_saved, restart_required} = await response.json();
+  const {contract: c, receipts, active_run, project_root, codex_context_saved, codex_context_rotation_reason, task_saved, restart_required, model_performance = []} = await response.json();
   projectRoot = project_root || '';
   document.querySelector('#project-location').textContent = projectRoot || 'Unknown project';
   savedCodexContext = codex_context_saved === true;
@@ -502,11 +502,19 @@ async function loadState(populateForm = false) {
   const contextComparison = freshAverage != null && reusedAverage != null
     ? `${freshAverage.toLocaleString()} fresh avg → ${reusedAverage.toLocaleString()} reused avg new tokens`
     : 'Fresh vs reused token comparison appears after both kinds of runs';
+  const lunaPerformance = model_performance.find(item => item.model === 'gpt-5.6-luna');
+  const lunaProof = lunaPerformance?.proof_rate == null
+    ? 'proof rate pending evaluation'
+    : `${Math.round(lunaPerformance.proof_rate * 100)}% proved`;
+  const lunaBenchmark = lunaPerformance
+    ? `${lunaPerformance.median_new_tokens.toLocaleString()} median new tokens · ${duration(lunaPerformance.median_runtime_seconds)} median runtime · ${lunaProof}`
+    : 'Benchmark begins after the next small task';
   document.querySelector('#summary').innerHTML = `
     <div class="metric"><b>${receipts.length}</b><span>guarded runs</span></div>
     <div class="metric"><b>${duration(total)}</b><span>total runtime</span></div>
     <div class="metric"><b>${proved}</b><span>outcomes proved</span></div>
-    <div class="metric"><b>${reusedRuns.length}</b><span>context-reused runs</span><small>${contextComparison}</small></div>`;
+    <div class="metric"><b>${reusedRuns.length}</b><span>context-reused runs</span><small>${contextComparison}</small></div>
+    <div class="metric"><b>${lunaPerformance?.runs || 0}</b><span>Luna small-task runs</span><small>${lunaBenchmark}</small></div>`;
   const runsElement = document.querySelector('#runs');
   const openFindings = new Set(
     [...runsElement.querySelectorAll('.run details[open]')].map(details => details.closest('.run')?.dataset.receipt)

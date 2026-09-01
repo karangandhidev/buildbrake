@@ -189,6 +189,51 @@ def select_agent_model(task_mode: str, requested: str = "auto") -> str | None:
     return "gpt-5.6-luna" if task_mode == "small" else None
 
 
+def model_performance(receipts: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Summarize comparable small-task results without letting outliers dominate."""
+    groups: dict[str, list[dict[str, object]]] = {}
+    for receipt in receipts:
+        if receipt.get("run_type") != "ai_agent" or receipt.get("task_mode") != "small":
+            continue
+        events = receipt.get("agent_events") or {}
+        usage = events.get("usage") if isinstance(events, dict) else None
+        if not isinstance(usage, dict) or usage.get("input_tokens") is None:
+            continue
+        model = str(receipt.get("agent_model") or "user_default")
+        groups.setdefault(model, []).append(receipt)
+
+    results = []
+    for model, runs in groups.items():
+        new_tokens = []
+        runtimes = []
+        evaluated = []
+        for run in runs:
+            events = run.get("agent_events") or {}
+            usage = events.get("usage") if isinstance(events, dict) else {}
+            total = int(usage.get("input_tokens") or 0) if isinstance(usage, dict) else 0
+            cached = int(usage.get("cached_input_tokens") or 0) if isinstance(usage, dict) else 0
+            new_tokens.append(max(0, total - cached))
+            runtimes.append(float(run.get("elapsed_seconds") or 0))
+            evaluation = run.get("evaluation") or {}
+            if isinstance(evaluation, dict) and isinstance(evaluation.get("proved_success"), bool):
+                evaluated.append(bool(evaluation["proved_success"]))
+
+        def median(values: list[int] | list[float]) -> float:
+            ordered = sorted(values)
+            middle = len(ordered) // 2
+            return float(ordered[middle]) if len(ordered) % 2 else (ordered[middle - 1] + ordered[middle]) / 2
+
+        results.append({
+            "model": model,
+            "runs": len(runs),
+            "median_new_tokens": round(median(new_tokens)),
+            "median_runtime_seconds": round(median(runtimes), 1),
+            "evaluated_runs": len(evaluated),
+            "proof_rate": round(sum(evaluated) / len(evaluated), 3) if evaluated else None,
+        })
+    return sorted(results, key=lambda result: str(result["model"]))
+
+
 def ensure_state_ignore(root: Path) -> None:
     folder = state_path(root)
     folder.mkdir(exist_ok=True)
