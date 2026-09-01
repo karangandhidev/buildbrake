@@ -56,9 +56,7 @@
     .stop { border-color: #7d3939; color: #ff8a82; }
     .context-option { display: inline-flex; align-items: center; gap: 8px; margin-right: 8px; vertical-align: middle; }
     .context-choice { display: inline-flex; align-items: center; gap: 8px; color: #55534d; font: inherit; }
-    .context-choice input { appearance: none; display: inline-grid; place-content: center; width: 16px; height: 16px; margin: 0; padding: 0; border: 1px solid #aaa89f; border-radius: 3px; background: #fff; }
-    .context-choice input::before { content: ''; width: 8px; height: 8px; border-radius: 1px; background: #315f8d; transform: scale(0); }
-    .context-choice input:checked::before { transform: scale(1); }
+    .context-choice input { appearance: auto; accent-color: #315f8d; width: 16px; height: 16px; margin: 0; }
     .context-info { position: relative; display: inline-grid; place-items: center; vertical-align: middle; flex: 0 0 auto; width: 17px; height: 17px; border: 1px solid currentColor; border-radius: 50%; color: #858e9f; font: 700 11px/1 sans-serif; cursor: help; }
     .context-info::after { content: attr(aria-label); position: absolute; z-index: 2; left: 50%; bottom: calc(100% + 8px); width: max-content; max-width: 260px; padding: 7px 9px; border-radius: 4px; background: #22221f; color: #fff; font: 12px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; text-align: left; transform: translateX(-50%); opacity: 0; visibility: hidden; pointer-events: none; }
     .context-info:hover::after, .context-info:focus::after { opacity: 1; visibility: visible; }
@@ -141,6 +139,7 @@
     button { border-color: #aaa89f; border-radius: 3px; background: #f6f5f1; color: #292824; transition: background .12s, border-color .12s; }
     button:not(.primary):not(.proved-button):not(.not-proved-button) { font-family: inherit; font-size: 1rem; font-weight: 700; line-height: normal; }
     button:hover { border-color: #77746c; background: #eae9e3; filter: none; transform: none; }
+    button.stop, button.stop:hover { border-color: #a7463e; background: #a7463e; color: #fff; }
     button:focus-visible, summary:focus-visible { outline-color: #315f8d; }
     .command-box, .live-output { border-color: #d0cec6; border-radius: 3px; background: #f0efe9; color: #292824; }
     .restart-notice { border-color: #b49a5c; border-radius: 3px; background: #fff8df; color: #56471e; }
@@ -167,10 +166,16 @@
     .run { padding: 0; overflow: hidden; }
     .run-head { margin: 0; padding: 14px 18px; border-bottom: 1px solid #d5d3cc; background: #f6f5f1; }
     .run-task { margin: 0; padding: 18px; border-bottom: 1px solid #e1dfd8; font: 500 1rem/1.55 Georgia, serif; overflow-wrap: anywhere; }
-    .run-layout { display: block; }
+    .run-layout { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr); gap: 24px; }
     .run-primary { padding: 18px; }
     .run-primary-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; overflow: hidden; border: 1px solid #d5d3cc; background: #d5d3cc; }
     .run-primary-meta > div { min-width: 0; padding: 13px 14px; background: #fff; line-height: 1.45; overflow-wrap: anywhere; word-break: normal; }
+    .copy-thread-button { float: right; margin: 0 4px 0 12px; padding: 4px 6px; line-height: 1; }
+    .copy-thread-button svg { display: block; width: 14px; height: 14px; transition: transform .2s ease; }
+    .copy-thread-button .copy-check { opacity: 0; transition: opacity .2s ease; }
+    .copy-thread-button.is-copying .copy-glyph { opacity: 0; }
+    .copy-thread-button.is-copying .copy-check { opacity: 1; }
+    .copy-thread-button.is-copying { position: relative; }
     .file-list { display: block; margin-top: 5px; color: #55534d; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .75rem; line-height: 1.6; overflow-wrap: anywhere; word-break: break-word; }
     .run-primary details { margin-top: 16px; }
     .run-interpretation { margin-top: 18px; padding: 14px 16px; border: 1px solid #d5d3cc; border-left: 3px solid #43824d; background: #f7f8f3; line-height: 1.5; }
@@ -204,7 +209,7 @@
     .finding > pre { margin: 0; padding: 15px; color: #19394f; background: #f3f8fa; }
     .command-box { align-items: stretch; padding: 0; overflow: hidden; }
     .command-box code { min-width: 0; padding: 12px 14px 16px; line-height: 1.55; scrollbar-gutter: stable; }
-    .command-box button { flex: 0 0 auto; align-self: stretch; margin: 0; border-width: 0 0 0 1px; border-radius: 0; white-space: nowrap; }
+    .command-box button { flex: 0 0 auto; align-self: stretch; min-height: 0; margin: 0; border-width: 0; border-radius: 0; white-space: nowrap; }
     .project-location { margin: -2px 0 18px; color: #65635c; font-size: .8rem; }
     .project-location code { display: inline-block; margin-left: 5px; color: #292824; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
     .task-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -217,20 +222,123 @@
     .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
     .modal-actions button { margin: 0; }
     .modal-error { min-height: 1.3em; margin-top: 10px; color: #a23f38; }
+
+    /* Spacious, single-column workspace. */
+    :root { --page: #f5f6f8; --panel: #fff; --ink: #171a21; --subtle: #667085; --line: #dfe3e8; --blue: #2457d6; --green: #277a43; --red: #b63f3f; }
+    body { background: var(--page); color: var(--ink); }
+    main { width: 100%; max-width: 1500px; padding: 0 40px 96px; }
+    header { min-height: 76px; margin-bottom: 32px; padding: 22px 0; border-bottom: 1px solid var(--line); }
+    h1 { font-size: 1.5rem; }
+    .brand-copy { color: var(--subtle); font-size: .9rem; }
+    .workspace { display: block; }
+    .content { width: 100%; min-width: 0; }
+    .companion { position: relative; top: auto; width: 100%; margin-bottom: 28px; padding: 30px 34px; border: 1px solid var(--line); border-left: 5px solid var(--blue); border-radius: 10px; background: var(--panel); }
+    .companion h2 { margin: 7px 0 8px; font: 650 clamp(1.55rem, 3vw, 2.2rem)/1.15 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .companion > p { max-width: 760px; font-size: 1rem; }
+    .journey { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 26px 0 18px; }
+    .journey li { min-height: 52px; padding: 16px 18px 16px 50px; border: 1px solid var(--line); border-radius: 7px; background: #f8f9fb; font-size: .88rem; }
+    .journey li::before { left: 16px; top: 14px; width: 24px; height: 24px; border-color: #9eabc0; background: #fff; color: var(--blue); }
+    .side-note { padding-top: 15px; border-color: var(--line); }
+    .new-task, .contract, .summary, .section-head, .runs { width: 100%; }
+    .new-task { margin-bottom: 20px; padding: 34px; border-color: var(--line); border-radius: 10px; }
+    .quick-task { border-top: 5px solid var(--blue); }
+    .quick-task h2 { margin-bottom: 10px; color: var(--ink); font-size: 1.05rem; }
+    .quick-task textarea { min-height: 130px; font-size: 1rem; line-height: 1.6; }
+    input, textarea, select { min-height: 46px; padding: 13px 15px; border-color: #aeb6c3; border-radius: 6px; }
+    .form-grid { gap: 24px; }
+    .live-run { min-height: 130px; border-left: 5px solid var(--blue); }
+    .live-head { align-items: flex-start; }
+    .live-output { max-height: 336px; padding: 20px; font-size: .9rem; line-height: 1.65; }
+    .contract { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin-top: 28px; border-color: var(--line); border-radius: 10px; background: var(--line); }
+    .contract .field { padding: 22px 26px; border-color: var(--line); background: #fff; }
+    .contract .field span { margin-top: 6px; font-size: 1rem; line-height: 1.6; }
+    .contract .success { grid-column: 1 / -1; padding: 26px; border-left: 5px solid var(--green); background: #f3faf5; }
+    .contract .success strong { color: var(--green); }
+    .contract .success span { color: #173e24; font-size: 1.12rem; font-weight: 600; }
+    .summary { grid-template-columns: repeat(5, minmax(150px, 1fr)); gap: 14px; margin: 22px 0 46px; }
+    .metric { min-height: 118px; padding: 22px; border-color: var(--line); border-radius: 9px; }
+    .metric b { font-size: 2rem; }
+    .metric span { display: block; margin-top: 7px; }
+    .section-head { margin: 0 0 18px; padding: 0 0 16px; border-bottom: 1px solid var(--line); }
+    .section-head h2 { color: var(--ink); font-size: .9rem; }
+    .contract-head { margin: 42px 0 18px; }
+    .contract-head h2 { margin-bottom: 7px; font-size: 1rem; }
+    .runs { gap: 24px; }
+    .run { border-color: #cfd5dd; border-radius: 10px; }
+    .run-head { padding: 20px 26px; background: #f7f8fa; }
+    .run-id { font-size: .85rem; }
+    .tag { padding: 7px 11px; }
+    .receipt-outcome { font-size: .82rem; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; }
+    .run-task { padding: 28px 30px; background: #fff; font: 600 1.12rem/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .run-layout { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(360px, .65fr); align-items: stretch; }
+    .run-primary { display: flex; min-width: 0; flex-direction: column; padding: 24px; }
+    .run-primary-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; border: 1px solid var(--line); background: var(--line); }
+    .run-primary-meta > div { padding: 15px 17px; border-bottom: 1px solid var(--line); background: #fff; font-size: .88rem; line-height: 1.5; }
+    .run-primary-meta > div:last-child { border-bottom: 0; }
+    .run-primary-meta strong, .run-resources strong { margin-bottom: 8px; color: #596273; font-size: .72rem; }
+    .file-list { margin-top: 10px; padding: 12px 14px; border-radius: 5px; background: #f7f8fa; font-size: .85rem; }
+    .run-interpretation { order: -2; margin: 0 0 16px; padding: 17px 19px; font-size: .9rem; line-height: 1.55; }
+    .finding { order: -1; max-width: none; margin: 0 0 16px !important; }
+    .finding > summary { padding: 16px 18px; }
+    .finding > pre { padding: 22px; font-size: .92rem; line-height: 1.7; }
+    .decision { order: -3; align-items: center; margin: 0 0 16px; padding: 17px 19px; border: 1px solid var(--line); border-radius: 8px; background: #f8f9fb; }
+    .decision-copy { font-size: 1rem; }
+    .decision button { min-height: 42px; padding: 11px 16px; }
+    .run-resources { min-width: 0; padding: 24px; border-top: 0; border-left: 1px solid var(--line); background: #f7f8fa; }
+    .run-resources > div + div { margin-top: 20px; }
+    .usage-value { padding: 13px 14px; border-radius: 6px; font-size: .8rem; line-height: 1.5; }
+    .resource-comparison { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .resource-row { display: flex; align-items: flex-start; padding: 12px 13px; }
+    .resource-status { text-align: left; }
+    .metric > span { display: flex; align-items: center; gap: 5px; }
+    .metric .context-info { display: inline-flex !important; width: 18px; height: 18px; margin: 0; line-height: 1; vertical-align: middle; }
+    .metric .context-info { align-items: center; justify-content: center; flex: 0 0 18px; font: 700 11px/18px sans-serif; }
+    .metric .context-info::after { right: 0; left: auto; transform: none; }
+    .context-option { display: inline-flex; align-items: center; gap: 8px; }
+    .context-choice { display: inline-flex; align-items: center; gap: 8px; line-height: 1.2; }
+    .project-location { display: inline; padding: 0; border: 0; background: transparent; }
+    .project-location code { padding: 2px 5px; border-radius: 3px; background: #dce7f3; color: #173552; }
+    select { appearance: none; padding-right: 42px; background-color: #fff; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='m1 1 5 5 5-5' fill='none' stroke='%23315f8d' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E"); background-position: right 15px center; background-repeat: no-repeat; cursor: pointer; }
+    select:focus { background-color: #fff; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='m1 1 5 5 5-5' fill='none' stroke='%23315f8d' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E"); }
+    button { min-height: 46px; transition: background .12s, border-color .12s, filter .12s, transform .12s; }
+    button:hover { filter: brightness(.9); }
+    button:active { filter: brightness(.78); transform: translateY(1px); }
+    .primary:hover { border-color: #315f8d; background: #315f8d; color: #fff; box-shadow: 0 3px 10px rgba(49,95,141,.28); }
+    .run-task-button, .run-task-button:hover { min-height: 42px; border-color: #43824d; background: #43824d; color: #fff; }
+    .refresh-runs-button { min-height: 42px; height: 42px; padding: 5px 10px; line-height: 1; }
+    .refresh-runs-button svg { display: block; width: 14px; height: 14px; transition: transform .35s ease; }
+    .refresh-runs-button:hover svg, .refresh-runs-button:active svg { transform: rotate(180deg); }
+    .copy-thread-button { min-height: 0; height: 26px; }
+    .runtime-meta { grid-column: 2; grid-row: 1; }
+    .context-choice input[type="checkbox"] { appearance: auto; flex: 0 0 auto; width: 17px; height: 17px; min-height: 0; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; accent-color: var(--blue); }
+    .context-choice input[type="checkbox"]:focus { box-shadow: none; outline: 2px solid rgba(36,87,214,.3); outline-offset: 2px; }
+    .cost-diagnosis { margin-top: 16px; padding: 18px 20px; font-size: .9rem; }
+    .command-box { cursor: pointer; }
+    .command-box:hover { background: #e5e9ee; }
+    .command-box button { width: 46px; min-height: 0; padding: 0; background: transparent; color: inherit; }
+    .command-box button:hover { background: #e5e9ee; filter: none; }
+    .command-box button svg { display: block; width: 18px; height: 18px; margin: auto; }
+    .command-box .copy-check { display: none; }
+    .command-box button.is-copying .copy-glyph { display: none; }
+    .command-box button.is-copying .copy-check { display: block; }
+    footer { margin-top: 56px; }
+    @media (max-width: 1050px) { .run-layout { grid-template-columns: 1fr; } .run-resources { border-top: 1px solid var(--line); border-left: 0; } .resource-comparison { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+    @media (max-width: 920px) { main { padding-left: 24px; padding-right: 24px; } .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .resource-comparison { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 680px) { main { padding-left: 16px; padding-right: 16px; } .companion, .new-task, .run-primary, .run-resources { padding: 22px; } .contract, .journey, .summary { grid-template-columns: 1fr; } .contract .success { grid-column: auto; } .form-grid { grid-template-columns: 1fr; } .resource-row { display: flex; } .resource-status { text-align: left; } .decision { align-items: stretch; flex-direction: column; } .decision-actions { width: 100%; justify-content: flex-start; margin-left: 0; } }
   </style>
 </head>
 <body>
 <main>
   <header><div><h1>Build<span class="mark">Brake</span></h1><p class="brand-copy">Task controls and run history</p></div><div class="pill">Local</div></header>
   <div id="restart-notice" class="restart-notice" hidden><strong>Dashboard restart required</strong><br>BuildBrake’s backend changed. Stop the current server with Ctrl+C, then run:<br><code>./bb serve</code><button type="button" onclick="copyRestartCommand(this)">Copy command</button></div>
-  <div class="workspace">
   <aside class="companion" aria-label="Build workflow">
     <span class="eyebrow">Workflow</span>
-    <h2>Run a guarded task</h2>
-    <p>Set the outcome and limits before starting a run.</p>
-    <ol class="journey"><li>Describe the outcome</li><li>Run the guarded task</li><li>Review the receipt</li></ol>
+    <h2>Ship the result you intended.</h2>
+    <p>Define a measurable outcome, run the agent within clear limits, then review the evidence and cost in one readable receipt.</p>
+    <ol class="journey"><li>Define observable success</li><li>Run within guardrails</li><li>Review proof and resources</li></ol>
     <div class="side-note">Run data is stored locally in this project.</div>
   </aside>
+  <div class="workspace">
   <div class="content">
   <section class="new-task quick-task">
     <h2>What should the agent do?</h2>
@@ -261,9 +369,10 @@
     </form>
   </details>
   <section id="agent-control" class="new-task live-run"></section>
+  <div class="section-head contract-head"><div><h2>Success contract</h2><span class="muted">The outcome and limits this run must satisfy.</span></div></div>
   <section id="contract" class="contract"></section>
   <section id="summary" class="summary"></section>
-  <div class="section-head"><h2>Run receipts</h2><div><span id="last-updated" class="muted"></span><button type="button" onclick="loadState(false)">Refresh runs</button></div></div>
+  <div class="section-head"><h2>Run receipts</h2><div><span id="last-updated" class="muted"></span><button class="refresh-runs-button" type="button" aria-label="Refresh runs" title="Refresh runs" onclick="loadState(false)"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 0 0-14.9-4L3 10"></path><path d="M3 5v5h5"></path><path d="M4 13a8 8 0 0 0 14.9 4L21 14"></path><path d="M21 19v-5h-5"></path></svg></button></div></div>
   <div id="runs"></div>
   <footer>Completed runs appear here automatically.</footer>
   </div>
@@ -361,20 +470,29 @@ async function clearQuickTask() {
   savedTaskAvailable = false;
   await loadState(false);
 }
-async function copyCommand(button) {
-  const command = button.closest('.command-box').querySelector('code').textContent;
+async function copyCommand(box) {
+  const command = box.querySelector('code').textContent;
   await navigator.clipboard.writeText(command);
-  button.textContent = 'Copied';
-  setTimeout(() => button.textContent = 'Copy command', 1600);
+  const button = box.querySelector('button');
+  button.classList.add('is-copying');
+  button.setAttribute('aria-label', 'Copied');
+  setTimeout(() => {
+    button.classList.remove('is-copying');
+    button.setAttribute('aria-label', 'Copy command');
+  }, 1600);
 }
 async function copyThreadId(button) {
   await navigator.clipboard.writeText(button.previousElementSibling.textContent);
-  button.textContent = 'Copied';
-  setTimeout(() => button.textContent = 'Copy', 1600);
+  button.classList.add('is-copying');
+  button.setAttribute('aria-label', 'Copied');
+  setTimeout(() => {
+    button.classList.remove('is-copying');
+    button.setAttribute('aria-label', 'Copy thread ID');
+  }, 1600);
 }
 function savedTaskResult(data) {
   const verification = data.verification_command ? `<div class="muted">Automatic verification: ${esc(data.verification_command)}</div>` : '<div class="muted">Outcome will require human evaluation.</div>';
-  return `<span class="good">Task passed and was saved.</span>${data.mode ? `<div>${esc(data.mode)} mode · ${data.budget_minutes} minute configured target</div>` : ''}${verification}<button class="primary" type="button" onclick="runAgent()">Run task</button><details class="terminal-alternative"><summary>Terminal alternative</summary><div class="command-box"><code>${esc(projectRelative(data.command))}</code><button type="button" onclick="copyCommand(this)">Copy command</button></div></details>`;
+  return `<span class="good">Task passed and was saved.</span>${data.mode ? `<div>${esc(data.mode)} mode · ${data.budget_minutes} minute configured target</div>` : ''}${verification}<button class="run-task-button" type="button" onclick="runAgent()">Run task</button><details class="terminal-alternative"><summary>Terminal alternative</summary><div class="command-box" role="button" tabindex="0" aria-label="Copy command" onclick="copyCommand(this)" onkeydown="if(event.key === 'Enter' || event.key === ' '){ event.preventDefault(); copyCommand(this); }"><code>${esc(projectRelative(data.command))}</code><button type="button" aria-label="Copy command"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><g class="copy-glyph"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></g><path class="copy-check" d="m5 12 4 4L19 6"></path></svg></button></div></details>`;
 }
 async function runAgent() {
   const fresh = document.querySelector('#fresh-context')?.checked === true;
@@ -489,11 +607,11 @@ async function loadState(populateForm = false) {
     form.elements.checkpoint_minutes.value = c.checkpoint_minutes;
   }
   document.querySelector('#contract').innerHTML = `
+    <div class="field success"><strong>Success must look like</strong><span>${esc(c.success)}</span></div>
     <div class="field"><strong>Problem</strong><span>${esc(c.problem)}</span></div>
     <div class="field"><strong>Who has it</strong><span>${esc(c.user)}</span></div>
     <div class="field"><strong>Current workaround</strong><span>${esc(c.current_workaround)}</span></div>
-    <div class="field"><strong>Limits</strong><span>${c.budget_minutes}m configured target · ${c.checkpoint_minutes}m checkpoints</span></div>
-    <div class="field success"><strong>Success must look like</strong><span>${esc(c.success)}</span></div>`;
+    <div class="field"><strong>Limits</strong><span>${c.budget_minutes}m configured target · ${c.checkpoint_minutes}m checkpoints</span></div>`;
   const total = receipts.reduce((sum, r) => sum + r.elapsed_seconds, 0);
   const stopped = receipts.filter(r => r.stopping_reason !== 'completed').length;
   const proved = receipts.filter(r => r.evaluation?.proved_success === true).length;
@@ -517,9 +635,9 @@ async function loadState(populateForm = false) {
     ? `${lunaPerformance.median_new_tokens.toLocaleString()} median new tokens · ${duration(lunaPerformance.median_runtime_seconds)} median runtime · ${lunaProof}`
     : 'Benchmark begins after the next small task';
   document.querySelector('#summary').innerHTML = `
+    <div class="metric"><b>${proved}</b><span>outcomes proved</span></div>
     <div class="metric"><b>${receipts.length}</b><span>guarded runs</span></div>
     <div class="metric"><b>${duration(total)}</b><span>total runtime</span></div>
-    <div class="metric"><b>${proved}</b><span>outcomes proved</span></div>
     <div class="metric"><b>${reusedRuns.length}</b><span>context-reused runs</span><small>${contextComparison}</small></div>
     <div class="metric"><b>${lunaPerformance?.runs || 0}</b><span>Luna small-task runs <span class="context-info" tabindex="0" role="img" aria-label="Benchmark uses evaluated small tasks and median new tokens to avoid distortion from unusually expensive runs.">i</span></span><small>${lunaBenchmark}</small></div>`;
   const runsElement = document.querySelector('#runs');
@@ -530,6 +648,7 @@ async function loadState(populateForm = false) {
   runsElement.innerHTML = receipts.length ? receipts.map(r => {
     const evaluation = r.evaluation?.proved_success;
     const decision = evaluation === true ? '<span class="good">proved</span>' : evaluation === false ? '<span class="bad">not proved</span>' : '<span class="muted">not evaluated</span>';
+    const receiptOutcome = evaluation === true ? '<span class="receipt-outcome good">● Proved</span>' : evaluation === false ? '<span class="receipt-outcome bad">● Not proved</span>' : '<span class="receipt-outcome muted">○ Needs review</span>';
     const note = r.evaluation?.evidence ? `<br><span class="muted">${esc(r.evaluation.evidence)}</span>` : '';
     const method = r.evaluation?.method === 'automatic_verification' ? 'Automatically verified' : r.evaluation?.method === 'human_review' ? 'Human reviewed' : '';
     const methodLabel = method ? `<br><span class="muted">${method}</span>` : '';
@@ -541,7 +660,11 @@ async function loadState(populateForm = false) {
     const totalTokens = tokenUsage?.input_tokens;
     const cachedTokens = tokenUsage?.cached_input_tokens || 0;
     const newTokens = totalTokens == null ? null : Math.max(0, totalTokens - cachedTokens);
-    const usage = totalTokens == null ? '—' : `${newTokens.toLocaleString()} new · ${cachedTokens.toLocaleString()} cached · ${totalTokens.toLocaleString()} total`;
+    const usage = totalTokens == null
+      ? (r.stopping_reason === 'scope_limit_exceeded'
+          ? 'Unavailable · agent stopped before Codex reported final usage'
+          : 'Usage was not reported')
+      : `${newTokens.toLocaleString()} new · ${cachedTokens.toLocaleString()} cached · ${totalTokens.toLocaleString()} total`;
     const contextDecision = r.context_decision || (r.context_rotation_reason
       ? 'started_fresh_automatically' : r.thread_reused ? 'reused_existing_thread' : 'started_fresh_manually');
     const contextLabels = {
@@ -577,16 +700,17 @@ async function loadState(populateForm = false) {
       ? `<div class="cost-diagnosis"><strong>Why usage was high</strong>${esc(efficiency.diagnosis.cause)}<br><span class="muted">Next: ${esc(efficiency.diagnosis.next_step)}</span></div>`
       : '';
     return `<article class="run" data-receipt="${esc(r.id)}">
-      <div class="run-head"><span class="run-id">${esc(r.id)}</span><span class="tag ${isAgent ? 'good' : ''}">${type}</span></div>
+      <div class="run-head"><div><span class="run-id">${esc(r.id)}</span> <span class="tag ${isAgent ? 'good' : ''}">${type}</span></div>${receiptOutcome}</div>
       <div class="run-task">${esc(command)}</div>
       <div class="run-layout">
         <div class="run-primary">
           <div class="run-primary-meta">
-            <div><strong>${isAgent ? 'Codex thread' : 'Run type'}</strong>${isAgent ? `<span>${esc(r.agent_events?.thread_id || '—')}</span> <button type="button" onclick="copyThreadId(this)">Copy</button>` : 'local command'}</div>
-            ${isAgent ? `<div><strong>Context decision</strong>${contextLabels[contextDecision] || '—'}${contextCosts}</div>` : ''}
-            <div><strong>Runtime</strong>${duration(r.elapsed_seconds)}</div>
-            <div><strong>Files changed</strong>${r.changed_files.length}${r.task_mode ? ` · ${esc(r.task_mode)} mode · ${esc(r.agent_model === 'user_default' || !r.agent_model ? 'default model' : r.agent_model)} · ${esc(r.agent_reasoning_effort === 'user_default' ? 'default' : r.agent_reasoning_effort || 'default')} reasoning` :''}${r.agent_model_decision ? `<small>${esc(r.agent_model_decision)}</small>` : ''}<span class="file-list">${changedFiles}</span></div>
+            <div><strong>${isAgent ? 'Codex thread' : 'Run type'}</strong>${isAgent ? `<span>${esc(r.agent_events?.thread_id || '—')}</span> <button class="copy-thread-button" type="button" aria-label="Copy thread ID" title="Copy thread ID" onclick="copyThreadId(this)"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><g class="copy-glyph"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></g><path class="copy-check" d="m5 12 4 4L19 6"></path></svg></button>` : 'local command'}</div>
+            <div class="runtime-meta"><strong>Runtime</strong>${duration(r.elapsed_seconds)}</div>
+            <div><strong>Files changed</strong>${r.changed_files.length}<span class="file-list">${changedFiles}</span></div>
             <div><strong>Stopped because</strong>${esc((r.stopping_reason || '—').replaceAll('_',' '))}</div>
+            ${isAgent ? `<div><strong>Context decision</strong>${contextLabels[contextDecision] || '—'}${contextCosts}</div>` : ''}
+            <div><strong>Run details</strong>${r.task_mode ? `${esc(r.task_mode)} mode · ${esc(r.agent_model === 'user_default' || !r.agent_model ? 'default model' : r.agent_model)} · ${esc(r.agent_reasoning_effort === 'user_default' ? 'default' : r.agent_reasoning_effort || 'default') } reasoning` : '—'}${r.agent_model_decision ? `<br><small>${esc(r.agent_model_decision)}</small>` : ''}</div>
           </div>${interpretation}${finding}<div class="decision">${label}</div>
         </div>
         <aside class="run-resources"><div><strong>Usage</strong><span class="usage-value">${usage}</span></div><div><strong>Resource comparison</strong>${efficiencyLabel}${costDiagnosis}</div></aside>

@@ -703,7 +703,12 @@ def classify_task(prompt: str) -> str:
     broad_scope = bool(words & BROAD_TASK_WORDS) or any(
         phrase in normalized for phrase in BROAD_TASK_PHRASES
     )
-    return "standard" if broad_scope else "small"
+    action_count = len(re.findall(
+        r"\b(?:add|change|convert|divide|fix|make|match|move|remove|replace|rework|turn|update)\b",
+        normalized,
+    ))
+    compound_scope = action_count >= 4
+    return "standard" if broad_scope or compound_scope else "small"
 
 
 def requires_human_review(prompt: str) -> bool:

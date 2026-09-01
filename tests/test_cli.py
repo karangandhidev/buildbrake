@@ -99,8 +99,10 @@ class BuildBrakeTests(unittest.TestCase):
         html = (ROOT / "src/buildbrake/static/index.html").read_text()
         self.assertIn("async function copyThreadId(button)", html)
         self.assertIn("navigator.clipboard.writeText(button.previousElementSibling.textContent)", html)
-        self.assertIn("button.textContent = 'Copied'", html)
-        self.assertIn("setTimeout(() => button.textContent = 'Copy', 1600)", html)
+        self.assertIn("button.classList.add('is-copying')", html)
+        self.assertIn("button.setAttribute('aria-label', 'Copied')", html)
+        self.assertIn("button.classList.remove('is-copying')", html)
+        self.assertIn("button.setAttribute('aria-label', 'Copy thread ID')", html)
         thread_row = re.search(r"<strong>\$\{isAgent \? 'Codex thread'.*?</div>", html)
         self.assertIsNotNone(thread_row)
         self.assertIn('onclick="copyThreadId(this)"', thread_row.group(0))
@@ -659,9 +661,9 @@ class BuildBrakeTests(unittest.TestCase):
         primary = html[html.index('<div class="run-primary-meta">'):html.index('</div>${interpretation}')]
         labels = [
             "<strong>${isAgent ? 'Codex thread' : 'Run type'}</strong>",
-            '<strong>Context decision</strong>',
             '<strong>Runtime</strong>', '<strong>Files changed</strong>',
-            '<strong>Stopped because</strong>',
+            '<strong>Stopped because</strong>', '<strong>Context decision</strong>',
+            '<strong>Run details</strong>',
         ]
         positions = [primary.index(label) for label in labels]
         self.assertEqual(positions, sorted(positions))
@@ -768,6 +770,11 @@ class BuildBrakeTests(unittest.TestCase):
         )
         self.assertGreater(len(detailed_css_task.split()), 35)
         self.assertEqual(classify_task(detailed_css_task), "small")
+        compound_ui_task = (
+            "add the copy icon inside the terminal command. fix the refresh icon height. "
+            "fix the task size dropdown arrow. make the refresh icon move when clicked."
+        )
+        self.assertEqual(classify_task(compound_ui_task), "standard")
         for narrow_scope in (
             "Validate the entire string before saving",
             "Make the entire button clickable",
@@ -786,6 +793,11 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertEqual(classify_task(redesign), "standard")
         self.assertTrue(requires_human_review(redesign))
         self.assertFalse(requires_human_review("Add 24px spacing between the heading and first card"))
+
+    def test_dashboard_explains_usage_missing_after_scope_stop(self):
+        html = (ROOT / "src/buildbrake/static/index.html").read_text()
+        self.assertIn("agent stopped before Codex reported final usage", html)
+        self.assertIn("r.stopping_reason === 'scope_limit_exceeded'", html)
 
     def test_small_task_manifest_exposes_nested_source_files(self):
         from buildbrake.cli import project_manifest
