@@ -305,6 +305,7 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
                 "proved_success": body["proved_success"],
                 "evidence": evidence.strip(),
                 "evaluated_at": now(),
+                "method": "human_review",
             }
             receipt_path.write_text(json.dumps(receipt, indent=2) + "\n")
             self.send_bytes(200, "application/json", json_bytes({"evaluation": receipt["evaluation"]}))

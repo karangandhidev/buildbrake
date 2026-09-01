@@ -95,6 +95,33 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertIsNotNone(thread_row)
         self.assertNotIn("thread_reused", thread_row.group(0))
 
+    def test_dashboard_copies_thread_ids_only_for_agent_receipts(self):
+        html = (ROOT / "src/buildbrake/static/index.html").read_text()
+        self.assertIn("async function copyThreadId(button)", html)
+        self.assertIn("navigator.clipboard.writeText(button.previousElementSibling.textContent)", html)
+        self.assertIn("button.textContent = 'Copied'", html)
+        self.assertIn("setTimeout(() => button.textContent = 'Copy', 1600)", html)
+        thread_row = re.search(r"<strong>\$\{isAgent \? 'Codex thread'.*?</div>", html)
+        self.assertIsNotNone(thread_row)
+        self.assertIn('onclick="copyThreadId(this)"', thread_row.group(0))
+        self.assertNotIn('copyThreadId(this)', html.split(" : 'local command'")[1].split('</div>', 1)[0])
+
+    def test_dashboard_labels_outcome_method_and_preserves_legacy_receipts(self):
+        html = (ROOT / "src/buildbrake/static/index.html").read_text()
+        self.assertIn("Automatically verified", html)
+        self.assertIn("Human reviewed", html)
+        self.assertIn("r.evaluation?.method === 'automatic_verification'", html)
+        self.assertIn("r.evaluation?.method === 'human_review'", html)
+        self.assertIn("const methodLabel = method ?", html)
+        self.assertIn('"method": "human_review"', (ROOT / "src/buildbrake/dashboard.py").read_text())
+
+    def test_dashboard_explains_luna_benchmark_with_existing_tooltip_style(self):
+        html = (ROOT / "src/buildbrake/static/index.html").read_text()
+        self.assertIn('Luna small-task runs <span class="context-info"', html)
+        self.assertIn('aria-label="Benchmark uses evaluated small tasks and median new tokens to avoid distortion from unusually expensive runs."', html)
+        self.assertIn('.context-info:hover::after, .context-info:focus::after', html)
+        self.assertIn('place-items: center; vertical-align: middle;', html)
+
     def test_dashboard_live_terminal_refresh_and_scrolling(self):
         html = (ROOT / "src/buildbrake/static/index.html").read_text()
         self.assertIn("const LIVE_REFRESH_MS = 2000", html)
