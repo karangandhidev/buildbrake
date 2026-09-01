@@ -390,7 +390,7 @@ function renderAgentRun(run) {
   const controls = running
     ? `<button class="stop" type="button" onclick="stopAgent()">Stop agent</button>`
     : savedTaskAvailable
-      ? `<div><label class="context-choice"><input id="fresh-context" type="checkbox" ${freshContext ? 'checked' : ''}> Start with fresh context</label><button type="button" onclick="runAgent()">Run saved task</button></div>`
+      ? `<div><label class="context-choice"><input id="fresh-context" type="checkbox" ${freshContext ? 'checked' : ''}> Start with fresh context</label><span class="muted">Starts a new Codex conversation without changing project files.</span><button type="button" onclick="runAgent()">Run saved task</button></div>`
       : '<span class="muted">Save a task to start an agent run</span>';
   const output = run.lines?.length ? `<div class="live-output">${run.lines.map(esc).join('<br>')}</div>` : '';
   const contextStatus = contextRotationReason

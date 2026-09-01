@@ -543,6 +543,7 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertIn("fetch('/api/task', {method: 'DELETE'})", html)
         self.assertIn("savedTaskAvailable = task_saved === true", html)
         self.assertIn("Save a task to start an agent run", html)
+        self.assertIn("Starts a new Codex conversation without changing project files.", html)
 
     def test_dashboard_uses_cancellable_in_page_outcome_dialog(self):
         from buildbrake.dashboard import dashboard_html
