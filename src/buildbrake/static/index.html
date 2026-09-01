@@ -200,7 +200,6 @@
     @media (max-width: 680px) { .run-primary-meta, .resource-comparison { grid-template-columns: 1fr; } .decision { flex-wrap: wrap; } .decision-actions { width: 100%; justify-content: flex-end; } .run-head, .run-task, .run-primary, .run-resources { padding-left: 15px; padding-right: 15px; } }
     .contract { display: block; padding: 0; overflow: hidden; }
     .contract .field { min-width: 0; padding: 12px 16px; border-bottom: 1px solid #e1dfd8; }
-    .contract .field:last-child { border-bottom: 0; }
     .contract .field span { display: block; font-size: .9rem; line-height: 1.4; overflow-wrap: anywhere; }
     .contract .success { border-left: 0; padding-left: 16px; }
     .finding { border: 1px solid #b8cbd9; background: #eef5f8; }
@@ -698,10 +697,13 @@ async function loadState(populateForm = false) {
       started_fresh_manually: 'Started fresh manually',
       started_fresh_automatically: 'Started fresh automatically'
     };
-    const legacyCosts = [...(r.context_rotation_reason || '').matchAll(/[\d,]+/g)].map(match => Number(match[0].replaceAll(',', '')));
+    const legacyCosts = (r.context_rotation_reason || '').startsWith('last reuse cost')
+      ? [...r.context_rotation_reason.matchAll(/[\d,]+/g)].map(match => Number(match[0].replaceAll(',', '')))
+      : [];
     const previousReuseCost = r.previous_reuse_cost ?? legacyCosts[0];
     const predictedFreshCost = r.predicted_fresh_cost ?? legacyCosts[1];
-    const contextCosts = contextDecision === 'started_fresh_automatically'
+    const hasMeasuredContextCosts = previousReuseCost != null || predictedFreshCost != null;
+    const contextCosts = contextDecision === 'started_fresh_automatically' && hasMeasuredContextCosts
       ? `<br><span class="muted">Previous reuse cost: ${previousReuseCost?.toLocaleString() ?? '—'} new tokens · Predicted fresh cost: ${predictedFreshCost?.toLocaleString() ?? '—'} new tokens</span>` : '';
     const changedFiles = Array.isArray(r.changed_files) && r.changed_files.length
       ? r.changed_files.map(path => esc(path)).join('<br>')

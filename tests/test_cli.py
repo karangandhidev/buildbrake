@@ -103,6 +103,8 @@ class BuildBrakeTests(unittest.TestCase):
         thread_row = re.search(r"<strong>\$\{isAgent \? 'Codex thread'.*?</div>", html)
         self.assertIsNotNone(thread_row)
         self.assertNotIn("thread_reused", thread_row.group(0))
+        self.assertIn("startsWith('last reuse cost')", html)
+        self.assertIn("contextDecision === 'started_fresh_automatically' && hasMeasuredContextCosts", html)
 
     def test_dashboard_copies_thread_ids_only_for_agent_receipts(self):
         html = (ROOT / "src/buildbrake/static/index.html").read_text()
