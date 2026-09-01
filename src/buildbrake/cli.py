@@ -74,10 +74,22 @@ def load_codex_thread(root: Path) -> str | None:
     return value
 
 
-def save_codex_thread(root: Path, thread_id: str) -> None:
+def load_codex_thread_model(root: Path) -> str | None:
+    path = codex_thread_path(root)
+    if not path.is_file():
+        return None
+    try:
+        value = json.loads(path.read_text()).get("model")
+    except (json.JSONDecodeError, AttributeError, OSError):
+        return None
+    return value if isinstance(value, str) and value else None
+
+
+def save_codex_thread(root: Path, thread_id: str, model: str | None = None) -> None:
     ensure_state_ignore(root)
     codex_thread_path(root).write_text(json.dumps({
         "thread_id": thread_id,
+        "model": model,
         "saved_at": now(),
     }, indent=2) + "\n")
 
@@ -157,15 +169,24 @@ def codex_thread_rotation_reason(
 
 def build_codex_command(
     codex: str, root: Path, prompt: str, sandbox: str, thread_id: str | None,
-    reasoning_effort: str | None = None,
+    reasoning_effort: str | None = None, model: str | None = None,
 ) -> list[str]:
     effort_options = ["-c", f'model_reasoning_effort="{reasoning_effort}"'] if reasoning_effort else []
+    model_options = ["--model", model] if model else []
     if thread_id:
-        return [codex, "exec", *effort_options, "resume", "--json", thread_id, prompt]
+        return [codex, "exec", *model_options, *effort_options, "resume", "--json", thread_id, prompt]
     return [
-        codex, "exec", *effort_options, "--json", "--color", "never", "--sandbox", sandbox,
+        codex, "exec", *model_options, *effort_options, "--json", "--color", "never", "--sandbox", sandbox,
         "--cd", str(root), prompt,
     ]
+
+
+def select_agent_model(task_mode: str, requested: str = "auto") -> str | None:
+    if requested == "user-default":
+        return None
+    if requested != "auto":
+        return requested
+    return "gpt-5.6-luna" if task_mode == "small" else None
 
 
 def ensure_state_ignore(root: Path) -> None:
@@ -818,7 +839,15 @@ def run_agent(args: argparse.Namespace) -> int:
     )
     manifest_context = "Known project files:\n" + "\n".join(f"- {path}" for path in manifest) + "\n" if manifest else ""
     saved_thread_id = None if getattr(args, "fresh", False) else load_codex_thread(root)
-    rotation_reason = (
+    agent_model = select_agent_model(task_mode, getattr(args, "model", "auto"))
+    saved_thread_model = load_codex_thread_model(root) if saved_thread_id else None
+    model_rotation_reason = None
+    if saved_thread_id and saved_thread_model != agent_model:
+        model_rotation_reason = (
+            f"cost-aware model changed from {saved_thread_model or 'user default'} "
+            f"to {agent_model or 'user default'}"
+        )
+    rotation_reason = model_rotation_reason or (
         codex_thread_rotation_reason(root, saved_thread_id, task_mode, prompt)
         if saved_thread_id else None
     )
@@ -829,7 +858,10 @@ def run_agent(args: argparse.Namespace) -> int:
         else "reused_existing_thread" if thread_id
         else "started_fresh_manually"
     )
-    rotation_costs = [int(value.replace(",", "")) for value in re.findall(r"[\d,]+", rotation_reason or "")]
+    rotation_costs = (
+        [int(value.replace(",", "")) for value in re.findall(r"[\d,]+", rotation_reason or "")]
+        if rotation_reason and rotation_reason.startswith("last reuse cost") else []
+    )
     handoff_context, handoff_files = compact_project_handoff(root, prompt, task_mode) if thread_id is None else ("", [])
     if handoff_files:
         manifest_context = ""
@@ -850,12 +882,15 @@ def run_agent(args: argparse.Namespace) -> int:
         f"{manifest_context}"
     )
     reasoning_effort = "low" if task_mode == "small" else None
-    command = build_codex_command(codex, root, guarded_prompt, args.sandbox, thread_id, reasoning_effort)
+    command = build_codex_command(
+        codex, root, guarded_prompt, args.sandbox, thread_id, reasoning_effort, agent_model,
+    )
     if rotation_reason:
         print(f"Codex context: starting fresh automatically · {rotation_reason}")
     else:
         print(f"Codex context: {'reusing project thread ' + thread_id if thread_id else 'starting a fresh project thread'}")
     print(f"Reasoning effort: {reasoning_effort or 'user default'}")
+    print(f"Model: {agent_model or 'user default'}")
     forwarded = argparse.Namespace(
         directory=str(root), command=command, no_checkpoints=args.no_checkpoints,
         child_stdin=subprocess.DEVNULL,
@@ -873,6 +908,7 @@ def run_agent(args: argparse.Namespace) -> int:
             "predicted_fresh_cost": rotation_costs[1] if len(rotation_costs) > 1 else None,
             "handoff_files": handoff_files,
             "agent_reasoning_effort": reasoning_effort or "user_default",
+            "agent_model": agent_model or "user_default",
         },
         scope_limits=limits,
     )
@@ -885,7 +921,7 @@ def run_agent(args: argparse.Namespace) -> int:
     receipt_data = json.loads(receipt.read_text())
     completed_thread = (receipt_data.get("agent_events") or {}).get("thread_id")
     if result == 0 and isinstance(completed_thread, str) and completed_thread:
-        save_codex_thread(root, completed_thread)
+        save_codex_thread(root, completed_thread, agent_model)
     verification = verification_command
     if result != 0:
         save_automatic_evaluation(receipt, False, "Agent did not complete successfully.", None)
@@ -1083,6 +1119,11 @@ def build_parser() -> argparse.ArgumentParser:
     agent.add_argument("--verify", help="command that automatically proves the outcome when it exits 0")
     agent.add_argument("--mode", choices=("auto", "small", "standard"), default="auto", help="scope-control mode")
     agent.add_argument("--fresh", action="store_true", help="start a new Codex thread instead of reusing this project's saved thread")
+    agent.add_argument(
+        "--model", default="auto",
+        choices=("auto", "user-default", "gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"),
+        help="agent model; auto uses Luna for small tasks and the configured default otherwise",
+    )
     agent.set_defaults(func=run_agent)
 
     check = sub.add_parser("preflight", help="check a task without starting an agent")

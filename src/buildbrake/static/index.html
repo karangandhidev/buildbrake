@@ -565,7 +565,7 @@ async function loadState(populateForm = false) {
             <div><strong>${isAgent ? 'Codex thread' : 'Run type'}</strong>${isAgent ? esc(r.agent_events?.thread_id || '—') : 'local command'}</div>
             ${isAgent ? `<div><strong>Context decision</strong>${contextLabels[contextDecision] || '—'}${contextCosts}</div>` : ''}
             <div><strong>Runtime</strong>${duration(r.elapsed_seconds)}</div>
-            <div><strong>Files changed</strong>${r.changed_files.length}${r.task_mode ? ` · ${esc(r.task_mode)} mode · ${esc(r.agent_reasoning_effort === 'user_default' ? 'default' : r.agent_reasoning_effort || 'default')} reasoning` :''}<span class="file-list">${changedFiles}</span></div>
+            <div><strong>Files changed</strong>${r.changed_files.length}${r.task_mode ? ` · ${esc(r.task_mode)} mode · ${esc(r.agent_model === 'user_default' || !r.agent_model ? 'default model' : r.agent_model)} · ${esc(r.agent_reasoning_effort === 'user_default' ? 'default' : r.agent_reasoning_effort || 'default')} reasoning` :''}<span class="file-list">${changedFiles}</span></div>
             <div><strong>Stopped because</strong>${esc((r.stopping_reason || '—').replaceAll('_',' '))}</div>
           </div>${interpretation}${finding}<div class="decision">${label}</div>
         </div>
