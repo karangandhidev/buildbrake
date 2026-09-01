@@ -51,9 +51,23 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertIn('<section id="agent-control"', html)
         self.assertNotIn('<details id="agent-control"', html)
         self.assertIn('id="fresh-context"', html)
+        self.assertIn('class="context-info" tabindex="0" role="img" aria-label="Starts a new Codex conversation without changing project files."', html)
+        self.assertIn('.context-info:hover::after, .context-info:focus::after', html)
+        self.assertNotIn('<span class="muted">Starts a new Codex conversation', html)
         self.assertIn("JSON.stringify({fresh})", html)
         self.assertIn('Small · strict and low cost', html)
         self.assertIn('Standard · broader work', html)
+
+    def test_dashboard_separates_context_decision_from_codex_thread_and_supports_legacy_receipts(self):
+        html = (ROOT / "src/buildbrake/static/index.html").read_text()
+        self.assertIn("<strong>Context decision</strong>", html)
+        self.assertIn("Started fresh automatically", html)
+        self.assertIn("Previous reuse cost:", html)
+        self.assertIn("Predicted fresh cost:", html)
+        self.assertIn("r.context_decision || (r.context_rotation_reason", html)
+        thread_row = re.search(r"<strong>\$\{isAgent \? 'Codex thread'.*?</div>", html)
+        self.assertIsNotNone(thread_row)
+        self.assertNotIn("thread_reused", thread_row.group(0))
 
     def test_dashboard_live_terminal_refresh_and_scrolling(self):
         html = (ROOT / "src/buildbrake/static/index.html").read_text()
@@ -529,7 +543,7 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertIn("context-reused runs", html)
         self.assertIn("codex_context_rotation_reason", html)
         self.assertIn("saved context reached its efficiency limit; next run starts fresh", html)
-        self.assertIn("auto-rotated", html)
+        self.assertIn("Started fresh automatically", html)
 
     def test_dashboard_shows_project_location_and_can_clear_quick_task(self):
         from buildbrake.dashboard import dashboard_html
@@ -567,6 +581,7 @@ class BuildBrakeTests(unittest.TestCase):
         primary = html[html.index('<div class="run-primary-meta">'):html.index('</div>${interpretation}')]
         labels = [
             "<strong>${isAgent ? 'Codex thread' : 'Run type'}</strong>",
+            '<strong>Context decision</strong>',
             '<strong>Runtime</strong>', '<strong>Files changed</strong>',
             '<strong>Stopped because</strong>',
         ]
@@ -575,11 +590,19 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertIn("r.changed_files.map(path => esc(path)).join('<br>')", html)
         self.assertIn(": '—';", html)
 
-    def test_dashboard_labels_codex_context_as_fresh_or_reused(self):
+    def test_agent_receipts_store_explicit_context_decision_and_rotation_costs(self):
         from buildbrake.dashboard import dashboard_html
 
+        source = (ROOT / "src/buildbrake/cli.py").read_text()
+        self.assertIn('"context_decision": context_decision', source)
+        self.assertIn('"previous_reuse_cost":', source)
+        self.assertIn('"predicted_fresh_cost":', source)
         html = dashboard_html().decode()
-        self.assertIn("r.thread_reused ? 'reused' : 'fresh'", html)
+        self.assertIn("reused_existing_thread: 'Reused existing Codex thread'", html)
+        self.assertIn("started_fresh_manually: 'Started fresh manually'", html)
+
+        html = dashboard_html().decode()
+        self.assertIn("r.thread_reused ? 'reused_existing_thread'", html)
 
     def test_receipt_layout_collapses_to_one_column_on_narrow_screens(self):
         from buildbrake.dashboard import dashboard_html
