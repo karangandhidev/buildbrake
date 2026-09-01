@@ -114,6 +114,7 @@ def codex_thread_rotation_reason(
     mode = mode if mode in RESOURCE_TARGETS else "standard"
     fresh_costs: list[int] = []
     comparable_fresh_costs: list[int] = []
+    current_thread_fresh_costs: list[int] = []
     for receipt in all_agent_receipts:
         if receipt.get("thread_reused") is not False or receipt.get("task_mode") != mode:
             continue
@@ -125,9 +126,13 @@ def codex_thread_rotation_reason(
         receipt_cached = int(receipt_usage.get("cached_input_tokens") or 0)
         cost = max(0, receipt_total - receipt_cached)
         fresh_costs.append(cost)
+        if receipt in matching:
+            current_thread_fresh_costs.append(cost)
         if next_prompt and task_similarity(next_prompt, str(receipt.get("agent_prompt") or "")) >= 0.15:
             comparable_fresh_costs.append(cost)
-    if comparable_fresh_costs:
+    if current_thread_fresh_costs:
+        fresh_costs = current_thread_fresh_costs
+    elif comparable_fresh_costs:
         fresh_costs = comparable_fresh_costs
     fresh_costs.sort()
     if fresh_costs:
@@ -138,9 +143,9 @@ def codex_thread_rotation_reason(
         )
     else:
         fresh_estimate = int(RESOURCE_TARGETS[mode]["new_tokens"])
-    rotation_threshold = max(
-        int(fresh_estimate * REUSE_COST_MULTIPLIER),
-        int(RESOURCE_TARGETS[mode]["new_tokens"] * TARGET_COST_MULTIPLIER),
+    rotation_threshold = (
+        int(fresh_estimate * REUSE_COST_MULTIPLIER) if fresh_costs
+        else int(RESOURCE_TARGETS[mode]["new_tokens"] * TARGET_COST_MULTIPLIER)
     )
     if new_tokens >= rotation_threshold:
         return (

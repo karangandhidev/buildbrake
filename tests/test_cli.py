@@ -824,6 +824,27 @@ class BuildBrakeTests(unittest.TestCase):
             root = Path(folder)
             receipts = root / ".buildbrake/receipts"
             receipts.mkdir(parents=True)
+            thread_id = "thread-clean"
+            (receipts / "20260901-090000-fresh.json").write_text(json.dumps({
+                "thread_reused": False, "task_mode": "small",
+                "agent_events": {"thread_id": thread_id, "usage": {
+                    "input_tokens": 137_213, "cached_input_tokens": 122_880,
+                }},
+            }))
+            (receipts / "20260901-100000-reused.json").write_text(json.dumps({
+                "thread_reused": True, "task_mode": "small",
+                "agent_events": {"thread_id": thread_id, "usage": {
+                    "input_tokens": 86_850, "cached_input_tokens": 63_488,
+                }},
+            }))
+            reason = codex_thread_rotation_reason(root, thread_id, "small")
+            self.assertIn("23,362 new tokens", reason)
+            self.assertIn("14,333", reason)
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            receipts = root / ".buildbrake/receipts"
+            receipts.mkdir(parents=True)
             (receipts / "latest.json").write_text(json.dumps({
                 "thread_reused": True,
                 "agent_events": {
