@@ -81,8 +81,17 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertIn('.context-info:hover::after, .context-info:focus::after', html)
         self.assertNotIn('<span class="muted">Starts a new Codex conversation', html)
         self.assertIn("JSON.stringify({fresh})", html)
-        self.assertIn('Small · strict and low cost', html)
+        self.assertIn('Small · strict limits', html)
         self.assertIn('Standard · broader work', html)
+
+    def test_task_size_uses_segmented_radios_instead_of_broken_native_selects(self):
+        html = (ROOT / "src/buildbrake/static/index.html").read_text()
+        self.assertEqual(html.count('<fieldset class="task-size'), 2)
+        self.assertEqual(html.count('type="radio" name="mode" value="auto" checked'), 2)
+        self.assertEqual(html.count('type="radio" name="mode" value="small"'), 2)
+        self.assertEqual(html.count('type="radio" name="mode" value="standard"'), 2)
+        self.assertNotIn('<select name="mode">', html)
+        self.assertIn('.task-size-option input:checked + span', html)
 
     def test_dashboard_separates_context_decision_from_codex_thread_and_supports_legacy_receipts(self):
         html = (ROOT / "src/buildbrake/static/index.html").read_text()
