@@ -849,6 +849,11 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertIn("Ran after the agent finished", html)
         self.assertIn("Not run · no verification command was supplied.", html)
 
+    def test_agent_finding_remains_a_normal_collapsible_disclosure(self):
+        html = (ROOT / "src/buildbrake/static/index.html").read_text()
+        self.assertIn('<details class="finding"><summary>${findingTitle}</summary>', html)
+        self.assertNotIn('<summary>${findingTitle}: ${esc(projectRelative', html)
+
     def test_codex_events_are_rendered_as_readable_progress(self):
         from buildbrake.cli import format_codex_event
 
