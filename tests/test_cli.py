@@ -853,6 +853,7 @@ class BuildBrakeTests(unittest.TestCase):
         html = (ROOT / "src/buildbrake/static/index.html").read_text()
         self.assertIn('<details class="finding"><summary>${findingTitle}</summary>', html)
         self.assertNotIn('<summary>${findingTitle}: ${esc(projectRelative', html)
+        self.assertIn('.finding > pre { padding: 22px; font: 400 .92rem/1.7', html)
 
     def test_codex_events_are_rendered_as_readable_progress(self):
         from buildbrake.cli import format_codex_event
