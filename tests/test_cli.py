@@ -141,6 +141,8 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertIn("r.evaluation?.method === 'human_review'", html)
         self.assertIn("const methodLabel = method ?", html)
         self.assertIn('"method": "human_review"', (ROOT / "src/buildbrake/dashboard.py").read_text())
+        self.assertIn("○ Visual review needed", html)
+        self.assertIn("Automated checks passed · confirm the visual result", html)
 
     def test_dashboard_explains_luna_benchmark_with_existing_tooltip_style(self):
         html = (ROOT / "src/buildbrake/static/index.html").read_text()
@@ -501,6 +503,8 @@ class BuildBrakeTests(unittest.TestCase):
                 task = json.loads((root / ".buildbrake/task.json").read_text())
                 self.assertEqual(task["prompt"], prompt)
                 self.assertEqual(task["mode"], "small")
+                self.assertTrue(task["human_review_required"])
+                self.assertTrue(data["human_review_required"])
                 contract = json.loads((root / ".buildbrake/outcome.json").read_text())
                 self.assertIn(prompt, contract["success"])
                 self.assertNotIn(prompt, contract["problem"])
@@ -534,6 +538,34 @@ class BuildBrakeTests(unittest.TestCase):
             saved = json.loads(receipt.read_text())
             self.assertFalse(saved["evaluation"]["proved_success"])
             self.assertEqual(saved["verification"]["exit_code"], 3)
+
+    def test_passing_visual_verification_waits_for_human_review(self):
+        from buildbrake.cli import run_verification
+
+        with tempfile.TemporaryDirectory() as folder:
+            receipt = Path(folder) / "receipt.json"
+            receipt.write_text(json.dumps({"id": "visual-test"}))
+            result = run_verification(
+                Path(folder), receipt, f'{sys.executable} -c "print(\'tests pass\')"', True,
+            )
+            saved = json.loads(receipt.read_text())
+            self.assertEqual(result, 0)
+            self.assertNotIn("evaluation", saved)
+            self.assertEqual(saved["verification"]["exit_code"], 0)
+            self.assertTrue(saved["human_review_required"])
+
+    def test_failing_visual_verification_is_automatically_not_proved(self):
+        from buildbrake.cli import run_verification
+
+        with tempfile.TemporaryDirectory() as folder:
+            receipt = Path(folder) / "receipt.json"
+            receipt.write_text(json.dumps({"id": "visual-test"}))
+            result = run_verification(
+                Path(folder), receipt, f'{sys.executable} -c "raise SystemExit(2)"', True,
+            )
+            saved = json.loads(receipt.read_text())
+            self.assertEqual(result, 1)
+            self.assertFalse(saved["evaluation"]["proved_success"])
 
     def test_dashboard_block_shows_every_failure_and_rewrite_without_starting_codex(self):
         from buildbrake.cli import Contract, preflight
@@ -826,7 +858,8 @@ class BuildBrakeTests(unittest.TestCase):
         redesign = "Redo the UI of BuildBrake to look more appealing to users"
         self.assertEqual(classify_task(redesign), "standard")
         self.assertTrue(requires_human_review(redesign))
-        self.assertFalse(requires_human_review("Add 24px spacing between the heading and first card"))
+        self.assertTrue(requires_human_review("Add 24px spacing between the heading and first card"))
+        self.assertFalse(requires_human_review("Return a 404 response when the receipt does not exist"))
 
     def test_dashboard_explains_usage_missing_after_scope_stop(self):
         html = (ROOT / "src/buildbrake/static/index.html").read_text()

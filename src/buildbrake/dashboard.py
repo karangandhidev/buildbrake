@@ -351,7 +351,7 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
             if not (0 < budget <= 240 and 0 < checkpoint <= budget):
                 self.send_bytes(400, "application/json", json_bytes({"error": "budget must be 0-240 minutes and checkpoint must not exceed it"}))
                 return
-            from buildbrake.cli import Contract, now
+            from buildbrake.cli import Contract, now, requires_human_review
             contract = Contract(
                 problem=body["problem"].strip(), user=body["user"].strip(),
                 current_workaround=body["current_workaround"].strip(), success=body["success"].strip(),
@@ -366,17 +366,20 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
             from dataclasses import asdict
             from buildbrake.cli import classify_task
             mode = classify_task(body["prompt"]) if requested_mode == "auto" else requested_mode
+            human_review = requires_human_review(body["prompt"])
             (folder / CONTRACT_FILE).write_text(json.dumps(asdict(contract), indent=2) + "\n")
             (folder / TASK_FILE).write_text(json.dumps({
                 "prompt": body["prompt"].strip(),
                 "verification_command": verification_command.strip() or None,
                 "mode": mode,
+                "human_review_required": human_review,
                 "saved_at": now(),
             }, indent=2) + "\n")
             command = dashboard_agent_command(root, mode)
             self.send_bytes(200, "application/json", json_bytes({
                 "decision": "PASS", "command": command, "mode": mode,
                 "budget_minutes": budget, "verification_command": verification_command.strip() or None,
+                "human_review_required": human_review,
             }))
 
         def save_quick_task(self) -> None:
@@ -405,7 +408,7 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
                 self.send_bytes(422, "application/json", json_bytes({"decision": "BLOCK", "failures": failures}))
                 return
             human_review = requires_human_review(prompt)
-            verification = None if human_review else detect_verification_command(root)
+            verification = detect_verification_command(root)
             folder = root / STATE_DIR
             folder.mkdir(exist_ok=True)
             from dataclasses import asdict
@@ -413,6 +416,7 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
             (folder / TASK_FILE).write_text(json.dumps({
                 "prompt": prompt, "verification_command": verification, "mode": mode,
                 "saved_at": now(), "created_with": "quick_task",
+                "human_review_required": human_review,
             }, indent=2) + "\n")
             command = dashboard_agent_command(root, mode)
             self.send_bytes(200, "application/json", json_bytes({

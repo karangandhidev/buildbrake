@@ -693,7 +693,10 @@ BROAD_TASK_PHRASES = (
 )
 SUBJECTIVE_OUTCOME_WORDS = {
     "appealing", "attractive", "beautiful", "cleaner", "easier", "friendly", "intuitive",
-    "modern", "polished", "prettier", "professional", "usable",
+    "modern", "polished", "prettier", "professional", "usable", "visual", "visually",
+    "align", "aligned", "alignment", "animation", "background", "color", "colour", "css",
+    "font", "height", "hover", "icon", "layout", "margin", "padding", "spacing", "transition",
+    "width",
 }
 
 
@@ -993,6 +996,9 @@ def run_agent(args: argparse.Namespace) -> int:
     if handoff_files:
         manifest_context = ""
     verification_command = args.verify or saved_task.get("verification_command") or None
+    human_review_required = bool(
+        saved_task.get("human_review_required") or requires_human_review(prompt)
+    )
     verification_context = agent_verification_instruction(verification_command)
     print(f"Task mode: {task_mode}" + (" · aim 4 commands · hard max 6 · max 3 files" if limits else ""))
     guarded_prompt = (
@@ -1038,6 +1044,7 @@ def run_agent(args: argparse.Namespace) -> int:
             "agent_reasoning_effort": reasoning_effort or "user_default",
             "agent_model": agent_model or "user_default",
             "agent_model_decision": model_decision,
+            "human_review_required": human_review_required,
         },
         scope_limits=limits,
     )
@@ -1056,7 +1063,7 @@ def run_agent(args: argparse.Namespace) -> int:
         save_automatic_evaluation(receipt, False, "Agent did not complete successfully.", None)
         return result
     if verification:
-        return run_verification(root, receipt, str(verification))
+        return run_verification(root, receipt, str(verification), human_review_required)
     if agent_reported_failure(receipt_data):
         message = str(receipt_data.get("agent_events", {}).get("final_message") or "Agent reported it could not reach the target.")
         save_automatic_evaluation(receipt, False, message, None, "agent_reported_failure")
@@ -1082,7 +1089,9 @@ def save_automatic_evaluation(
     receipt_path.write_text(json.dumps(receipt, indent=2) + "\n")
 
 
-def run_verification(root: Path, receipt_path: Path, command: str) -> int:
+def run_verification(
+    root: Path, receipt_path: Path, command: str, human_review_required: bool = False,
+) -> int:
     print(f"\nVerifying outcome: {command}")
     try:
         arguments = shlex.split(command)
@@ -1100,6 +1109,13 @@ def run_verification(root: Path, receipt_path: Path, command: str) -> int:
         proved = False
         verification = {"command": command, "error": str(exc)}
         evidence = f"Verification could not complete: {exc}"
+    if proved and human_review_required:
+        receipt = json.loads(receipt_path.read_text())
+        receipt["verification"] = verification
+        receipt["human_review_required"] = True
+        receipt_path.write_text(json.dumps(receipt, indent=2) + "\n")
+        print("Automated checks passed; visual outcome requires human review.")
+        return 0
     save_automatic_evaluation(receipt_path, proved, evidence, verification)
     print(f"Automatic outcome: {'PROVED' if proved else 'NOT PROVED'}")
     return 0 if proved else 1

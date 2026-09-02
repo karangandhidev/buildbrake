@@ -704,11 +704,13 @@ async function loadState(populateForm = false) {
   runsElement.innerHTML = receipts.length ? receipts.map(r => {
     const evaluation = r.evaluation?.proved_success;
     const decision = evaluation === true ? '<span class="good">proved</span>' : evaluation === false ? '<span class="bad">not proved</span>' : '<span class="muted">not evaluated</span>';
-    const receiptOutcome = evaluation === true ? '<span class="receipt-outcome good">● Proved</span>' : evaluation === false ? '<span class="receipt-outcome bad">● Not proved</span>' : '<span class="receipt-outcome muted">○ Needs review</span>';
+    const visualReviewPending = evaluation == null && r.human_review_required === true && r.verification?.exit_code === 0;
+    const receiptOutcome = evaluation === true ? '<span class="receipt-outcome good">● Proved</span>' : evaluation === false ? '<span class="receipt-outcome bad">● Not proved</span>' : visualReviewPending ? '<span class="receipt-outcome muted">○ Visual review needed</span>' : '<span class="receipt-outcome muted">○ Needs review</span>';
     const note = r.evaluation?.evidence ? `<br><span class="muted">${esc(r.evaluation.evidence)}</span>` : '';
     const method = r.evaluation?.method === 'automatic_verification' ? 'Automatically verified' : r.evaluation?.method === 'human_review' ? 'Human reviewed' : '';
     const methodLabel = method ? `<br><span class="muted">${method}</span>` : '';
-    const label = `<div class="decision-copy"><strong>Outcome:</strong> ${decision}${methodLabel}${note}</div><div class="decision-actions"><button class="proved-button" onclick="evaluateRun('${esc(r.id)}', true)">Proved</button><button class="not-proved-button" onclick="evaluateRun('${esc(r.id)}', false)">Not proved</button></div>`;
+    const reviewNote = visualReviewPending ? '<br><span class="muted">Automated checks passed · confirm the visual result</span>' : '';
+    const label = `<div class="decision-copy"><strong>Outcome:</strong> ${decision}${reviewNote}${methodLabel}${note}</div><div class="decision-actions"><button class="proved-button" onclick="evaluateRun('${esc(r.id)}', true)">Proved</button><button class="not-proved-button" onclick="evaluateRun('${esc(r.id)}', false)">Not proved</button></div>`;
     const command = r.run_type === 'ai_agent' ? `${r.agent} agent: ${r.agent_prompt}` : r.command.join(' ');
     const isAgent = r.run_type === 'ai_agent';
     const type = isAgent ? 'AI agent' : 'command';
