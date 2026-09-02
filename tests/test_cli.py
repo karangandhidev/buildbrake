@@ -28,6 +28,9 @@ class BuildBrakeTests(unittest.TestCase):
             run("change database parser", 90_000),
         ], "fix receipt button padding", "small")
         self.assertEqual(estimate["median_new_tokens"], 15_000)
+        self.assertEqual(estimate["low_new_tokens"], 10_000)
+        self.assertEqual(estimate["high_new_tokens"], 20_000)
+        self.assertEqual(estimate["confidence"], "low")
         self.assertEqual(estimate["sample_count"], 2)
         self.assertEqual(estimate["basis"], "similar tasks")
 
@@ -35,9 +38,27 @@ class BuildBrakeTests(unittest.TestCase):
         source = (ROOT / "src/buildbrake/cli.py").read_text()
         html = (ROOT / "src/buildbrake/static/index.html").read_text()
         self.assertIn('"estimated_new_tokens": cost_estimate.get("median_new_tokens")', source)
-        self.assertIn("Pre-run estimate:", html)
-        self.assertIn("actual was ${Math.abs(estimateDifference).toLocaleString()}%", html)
-        self.assertIn("actual matched estimate", html)
+        self.assertIn('"estimated_new_tokens_low":', source)
+        self.assertIn('"cost_estimate_confidence":', source)
+        self.assertIn("Pre-run range:", html)
+        self.assertIn("actual was inside range", html)
+
+    def test_task_cost_estimate_prefers_matching_model_and_context(self):
+        from buildbrake.cli import estimate_task_cost
+
+        def run(tokens, model, reused):
+            return {
+                "run_type": "ai_agent", "task_mode": "small", "agent_prompt": "fix button css",
+                "agent_model": model, "thread_reused": reused,
+                "agent_events": {"usage": {"input_tokens": tokens, "cached_input_tokens": 0}},
+            }
+
+        estimate = estimate_task_cost([
+            run(10_000, "gpt-5.6-luna", True), run(14_000, "gpt-5.6-luna", True),
+            run(60_000, "gpt-5.6-luna", False), run(90_000, "user_default", True),
+        ], "fix button spacing css", "small", "gpt-5.6-luna", True)
+        self.assertEqual(estimate["median_new_tokens"], 12_000)
+        self.assertEqual(estimate["basis"], "same model, context, and similar tasks")
 
     def test_model_performance_compares_small_runs_with_medians_and_proof_rate(self):
         from buildbrake.cli import model_performance

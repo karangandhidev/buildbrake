@@ -549,7 +549,7 @@ async function refreshRuns(button) {
 }
 function savedTaskResult(data) {
   const verification = data.verification_command ? `<div class="muted">Automatic verification: ${esc(data.verification_command)}</div>` : '<div class="muted">Outcome will require human evaluation.</div>';
-  const estimate = data.cost_estimate ? `<div class="muted">Expected usage: about ${data.cost_estimate.median_new_tokens.toLocaleString()} new tokens · based on ${data.cost_estimate.sample_count} ${esc(data.cost_estimate.basis)}</div>` : '<div class="muted">Expected usage: not enough previous runs to estimate</div>';
+  const estimate = data.cost_estimate ? `<div class="muted">Expected usage: ${data.cost_estimate.low_new_tokens.toLocaleString()}–${data.cost_estimate.high_new_tokens.toLocaleString()} new tokens · ${esc(data.cost_estimate.confidence)} confidence · based on ${data.cost_estimate.sample_count} ${esc(data.cost_estimate.basis)}</div>` : '<div class="muted">Expected usage: not enough previous runs to estimate</div>';
   return `<span class="good">Task passed and was saved.</span>${data.mode ? `<div>${esc(data.mode)} mode · ${data.budget_minutes} minute configured target</div>` : ''}${estimate}${verification}<button class="run-task-button" type="button" onclick="runAgent()">Run task</button><details class="terminal-alternative"><summary>Terminal alternative</summary><div class="command-box" role="button" tabindex="0" aria-label="Copy command" onclick="copyCommand(this)" onkeydown="if(event.key === 'Enter' || event.key === ' '){ event.preventDefault(); copyCommand(this); }"><code>${esc(projectRelative(data.command))}</code><button type="button" aria-label="Copy command"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><g class="copy-glyph"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></g><path class="copy-check" d="m5 12 4 4L19 6"></path></svg></button></div></details>`;
 }
 async function runAgent() {
@@ -585,7 +585,7 @@ function renderAgentRun(run) {
   const contextStatus = contextRotationReason
     ? `saved context reached its efficiency limit; next run starts fresh (${contextRotationReason})`
     : savedCodexContext ? 'saved project context ready' : 'next run starts fresh';
-  const costPreview = savedTaskAvailable && taskCostEstimate ? `<br><span class="muted">Expected: about ${taskCostEstimate.median_new_tokens.toLocaleString()} new tokens from ${taskCostEstimate.sample_count} ${esc(taskCostEstimate.basis)}</span>` : '';
+  const costPreview = savedTaskAvailable && taskCostEstimate ? `<br><span class="muted">Expected: ${taskCostEstimate.low_new_tokens.toLocaleString()}–${taskCostEstimate.high_new_tokens.toLocaleString()} new tokens · ${esc(taskCostEstimate.confidence)} confidence · ${taskCostEstimate.sample_count} ${esc(taskCostEstimate.basis)}</span>` : '';
   control.innerHTML = `<div class="live-head"><div><h2>Agent run</h2><span class="${statusClass}">${esc(run.status)}</span> · ${duration(run.elapsed_seconds)}<br><span class="muted">${contextStatus}</span>${costPreview}</div>${controls}</div>${output}`;
   const nextOutput = document.querySelector('#agent-control .live-output');
   if (nextOutput) nextOutput.scrollTop = wasAtBottom ? nextOutput.scrollHeight : previousScrollTop;
@@ -727,13 +727,14 @@ async function loadState(populateForm = false) {
           ? 'Unavailable · agent stopped before Codex reported final usage'
           : 'Usage was not reported')
       : `${newTokens.toLocaleString()} new · ${cachedTokens.toLocaleString()} cached · ${totalTokens.toLocaleString()} total`;
-    const estimateDifference = newTokens != null && r.estimated_new_tokens
-      ? Math.round((newTokens - r.estimated_new_tokens) / r.estimated_new_tokens * 100)
-      : null;
-    const estimateResult = estimateDifference === 0 ? 'actual matched estimate'
-      : `actual was ${Math.abs(estimateDifference).toLocaleString()}% ${estimateDifference > 0 ? 'above' : 'below'} estimate`;
-    const estimateComparison = estimateDifference == null ? ''
-      : `<small>Pre-run estimate: ${r.estimated_new_tokens.toLocaleString()} · ${estimateResult}</small>`;
+    const estimateLow = r.estimated_new_tokens_low ?? r.estimated_new_tokens;
+    const estimateHigh = r.estimated_new_tokens_high ?? r.estimated_new_tokens;
+    const estimateResult = newTokens == null || estimateLow == null || estimateHigh == null ? null
+      : newTokens < estimateLow ? `${Math.round((estimateLow - newTokens) / estimateLow * 100).toLocaleString()}% below range`
+      : newTokens > estimateHigh ? `${Math.round((newTokens - estimateHigh) / estimateHigh * 100).toLocaleString()}% above range`
+      : 'actual was inside range';
+    const estimateComparison = estimateResult == null ? ''
+      : `<small>Pre-run range: ${estimateLow.toLocaleString()}–${estimateHigh.toLocaleString()} · ${esc(r.cost_estimate_confidence || 'legacy')} confidence · ${estimateResult}</small>`;
     const contextDecision = r.context_decision || (r.context_rotation_reason
       ? 'started_fresh_automatically' : r.thread_reused ? 'reused_existing_thread' : 'started_fresh_manually');
     const contextLabels = {

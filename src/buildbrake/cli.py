@@ -231,10 +231,15 @@ def load_receipts(root: Path) -> list[dict[str, object]]:
 
 def estimate_task_cost(
     receipts: list[dict[str, object]], prompt: str, mode: str,
+    model: str | None = None, thread_reused: bool | None = None,
 ) -> dict[str, object] | None:
-    """Estimate new-token cost from comparable completed runs, with a mode fallback."""
-    comparable: list[int] = []
-    same_mode: list[int] = []
+    """Estimate a new-token range from the closest available completed runs."""
+    groups: dict[str, list[int]] = {
+        "same model, context, and similar tasks": [],
+        "same model and context": [],
+        "similar tasks": [],
+        f"all {mode} tasks": [],
+    }
     for receipt in receipts:
         if receipt.get("run_type") != "ai_agent" or receipt.get("task_mode") != mode:
             continue
@@ -243,19 +248,39 @@ def estimate_task_cost(
         if not isinstance(usage, dict) or usage.get("input_tokens") is None:
             continue
         cost = max(0, int(usage.get("input_tokens") or 0) - int(usage.get("cached_input_tokens") or 0))
-        same_mode.append(cost)
-        if task_similarity(prompt, str(receipt.get("agent_prompt") or "")) >= 0.15:
-            comparable.append(cost)
-    samples = comparable or same_mode
+        similar = task_similarity(prompt, str(receipt.get("agent_prompt") or "")) >= 0.15
+        receipt_model = str(receipt.get("agent_model") or "user_default")
+        model_matches = model is None or receipt_model == model
+        context_matches = thread_reused is None or receipt.get("thread_reused") is thread_reused
+        groups[f"all {mode} tasks"].append(cost)
+        if similar:
+            groups["similar tasks"].append(cost)
+        if (model is not None or thread_reused is not None) and model_matches and context_matches:
+            groups["same model and context"].append(cost)
+            if similar:
+                groups["same model, context, and similar tasks"].append(cost)
+    basis, samples = next(((name, values) for name, values in groups.items() if values), ("", []))
     if not samples:
         return None
     ordered = sorted(samples)
     middle = len(ordered) // 2
     median = ordered[middle] if len(ordered) % 2 else (ordered[middle - 1] + ordered[middle]) // 2
+    if len(ordered) == 1:
+        low, high = int(median * 0.70), int(median * 1.40)
+    elif len(ordered) < 4:
+        low, high = ordered[0], ordered[-1]
+    else:
+        low = ordered[round((len(ordered) - 1) * 0.10)]
+        high = ordered[round((len(ordered) - 1) * 0.90)]
+    spread = (high - low) / median if median else 1.0
+    confidence = "high" if len(ordered) >= 8 and spread <= 0.75 else "medium" if len(ordered) >= 3 else "low"
     return {
         "median_new_tokens": median,
+        "low_new_tokens": low,
+        "high_new_tokens": high,
+        "confidence": confidence,
         "sample_count": len(samples),
-        "basis": "similar tasks" if comparable else f"all {mode} tasks",
+        "basis": basis,
     }
 
 
@@ -994,7 +1019,6 @@ def run_agent(args: argparse.Namespace) -> int:
     requested_model = getattr(args, "model", "auto")
     historical_receipts = load_receipts(root)
     performance = model_performance(historical_receipts)
-    cost_estimate = estimate_task_cost(historical_receipts, prompt, task_mode)
     agent_model = select_agent_model(task_mode, requested_model, performance)
     if requested_model == "auto":
         _, model_decision = automatic_model_decision(task_mode, performance)
@@ -1014,6 +1038,10 @@ def run_agent(args: argparse.Namespace) -> int:
         if saved_thread_id else None
     )
     thread_id = None if rotation_reason else saved_thread_id
+    cost_estimate = estimate_task_cost(
+        historical_receipts, prompt, task_mode,
+        agent_model or "user_default", thread_id is not None,
+    )
     context_decision = (
         "started_fresh_automatically" if rotation_reason
         else "started_fresh_manually" if getattr(args, "fresh", False)
@@ -1078,6 +1106,9 @@ def run_agent(args: argparse.Namespace) -> int:
             "agent_model_decision": model_decision,
             "human_review_required": human_review_required,
             "estimated_new_tokens": cost_estimate.get("median_new_tokens") if cost_estimate else None,
+            "estimated_new_tokens_low": cost_estimate.get("low_new_tokens") if cost_estimate else None,
+            "estimated_new_tokens_high": cost_estimate.get("high_new_tokens") if cost_estimate else None,
+            "cost_estimate_confidence": cost_estimate.get("confidence") if cost_estimate else None,
             "cost_estimate_samples": cost_estimate.get("sample_count") if cost_estimate else 0,
             "cost_estimate_basis": cost_estimate.get("basis") if cost_estimate else None,
         },
