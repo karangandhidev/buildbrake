@@ -758,6 +758,9 @@ async function loadState(populateForm = false) {
       : '';
     const findingTitle = r.interpretation ? "Agent's raw finding" : "Agent's final finding";
     const finding = r.agent_events?.final_message ? `<details class="finding"><summary>${findingTitle}</summary><pre>${esc(projectRelative(r.agent_events.final_message))}</pre></details>` : '';
+    const verificationRun = r.verification?.command
+      ? `<div class="run-interpretation ${r.verification.exit_code === 0 ? 'good' : 'bad'}"><strong>BuildBrake verification</strong><br>Ran after the agent finished · ${r.verification.exit_code === 0 ? 'passed' : `failed (exit ${r.verification.exit_code})`}<br><small>${esc(projectRelative(r.verification.command))}</small></div>`
+      : '<div class="run-interpretation muted"><strong>BuildBrake verification</strong><br>Not run · no verification command was supplied.</div>';
     const efficiency = r.efficiency;
     const resourceNames = {new_tokens: 'New tokens', commands: 'Commands', files: 'Files changed', runtime: 'Runtime'};
     const resourceValue = (metric, value) => metric === 'runtime' ? duration(value) : value.toLocaleString();
@@ -784,7 +787,7 @@ async function loadState(populateForm = false) {
             <div><strong>Stopped because</strong>${esc((r.stopping_reason || '—').replaceAll('_',' '))}</div>
             ${isAgent ? `<div><strong>Context decision</strong>${contextLabels[contextDecision] || '—'}${contextCosts}</div>` : ''}
             <div><strong>Run details</strong>${r.task_mode ? `${esc(r.task_mode)} mode · ${esc(r.agent_model === 'user_default' || !r.agent_model ? 'default model' : r.agent_model)} · ${esc(r.agent_reasoning_effort === 'user_default' ? 'default' : r.agent_reasoning_effort || 'default') } reasoning` : '—'}${r.agent_model_decision ? `<br><small>${esc(r.agent_model_decision)}</small>` : ''}</div>
-          </div>${interpretation}${finding}<div class="decision">${label}</div>
+          </div>${interpretation}${verificationRun}${finding}<div class="decision">${label}</div>
         </div>
         <aside class="run-resources"><div><strong>Usage</strong><span class="usage-value">${usage}</span>${estimateComparison}</div><div><strong>Resource comparison</strong>${efficiencyLabel}${costDiagnosis}</div></aside>
       </div>

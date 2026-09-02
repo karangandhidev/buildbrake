@@ -843,6 +843,12 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertIn("Agent's raw finding", html)
         self.assertEqual(html.count("${esc(r.task_mode)} mode"), 1)
 
+    def test_dashboard_distinguishes_agent_claims_from_buildbrake_verification(self):
+        html = (ROOT / "src/buildbrake/static/index.html").read_text()
+        self.assertIn("BuildBrake verification", html)
+        self.assertIn("Ran after the agent finished", html)
+        self.assertIn("Not run · no verification command was supplied.", html)
+
     def test_codex_events_are_rendered_as_readable_progress(self):
         from buildbrake.cli import format_codex_event
 
