@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import json
 import os
@@ -912,9 +913,15 @@ def compact_project_handoff(root: Path, prompt: str, mode: str) -> tuple[str, li
     return "\n".join(lines) + "\n", likely_files
 
 
-def agent_verification_instruction(command: object) -> str:
+def agent_verification_instruction(command: object, adaptive: bool = False) -> str:
     if not isinstance(command, str) or not command.strip():
         return ""
+    if adaptive:
+        return (
+            "BuildBrake verification:\n"
+            "- BuildBrake will choose and run the smallest relevant checks after seeing the files you changed.\n"
+            "- Do not run the full project suite yourself unless a failed edit requires targeted diagnosis.\n"
+        )
     return (
         "BuildBrake verification:\n"
         f"- BuildBrake will run this exact command after the agent exits: {command.strip()}\n"
@@ -1056,10 +1063,17 @@ def run_agent(args: argparse.Namespace) -> int:
     if handoff_files:
         manifest_context = ""
     verification_command = args.verify or saved_task.get("verification_command") or None
+    verification_mode = (
+        "explicit" if args.verify or saved_task.get("verification_mode") == "explicit"
+        else "adaptive" if saved_task.get("created_with") == "quick_task"
+        else "explicit"
+    )
     human_review_required = bool(
         saved_task.get("human_review_required") or requires_human_review(prompt)
     )
-    verification_context = agent_verification_instruction(verification_command)
+    verification_context = agent_verification_instruction(
+        verification_command, verification_mode == "adaptive",
+    )
     print(f"Task mode: {task_mode}" + (" · aim 4 commands · hard max 6 · max 3 files" if limits else ""))
     guarded_prompt = (
         f"{prompt.strip()}\n\n"
@@ -1094,6 +1108,7 @@ def run_agent(args: argparse.Namespace) -> int:
             "agent_prompt": prompt.strip(),
             "agent_sandbox": args.sandbox,
             "verification_command": verification_command,
+            "verification_mode": verification_mode,
             "task_mode": task_mode,
             "thread_reused": thread_id is not None,
             "context_decision": context_decision,
@@ -1129,7 +1144,10 @@ def run_agent(args: argparse.Namespace) -> int:
         save_automatic_evaluation(receipt, False, "Agent did not complete successfully.", None)
         return result
     if verification:
-        return run_verification(root, receipt, str(verification), human_review_required)
+        return run_verification(
+            root, receipt, str(verification), human_review_required,
+            adaptive=verification_mode == "adaptive", task_mode=task_mode, prompt=prompt,
+        )
     if agent_reported_failure(receipt_data):
         message = str(receipt_data.get("agent_events", {}).get("final_message") or "Agent reported it could not reach the target.")
         save_automatic_evaluation(receipt, False, message, None, "agent_reported_failure")
@@ -1155,26 +1173,147 @@ def save_automatic_evaluation(
     receipt_path.write_text(json.dumps(receipt, indent=2) + "\n")
 
 
+def targeted_unittest_commands(
+    root: Path, prompt: str, changed_files: list[str], limit: int = 4,
+) -> list[str]:
+    """Find unittest methods whose names best match the requested change."""
+    query = meaningful_words(prompt)
+    for changed in changed_files:
+        query.update(part for part in re.split(r"[^a-z0-9]+", Path(changed).stem.lower()) if len(part) > 2)
+    query -= {"add", "change", "file", "make", "test", "tests", "update"}
+    matches: list[tuple[int, str]] = []
+    tests_dir = root / "tests"
+    for path in sorted(tests_dir.glob("test_*.py")) if tests_dir.is_dir() else []:
+        try:
+            tree = ast.parse(path.read_text())
+        except (OSError, SyntaxError, UnicodeError):
+            continue
+        module = ".".join(path.relative_to(root).with_suffix("").parts)
+        for node in tree.body:
+            if not isinstance(node, ast.ClassDef):
+                continue
+            for method in node.body:
+                if not isinstance(method, (ast.FunctionDef, ast.AsyncFunctionDef)) or not method.name.startswith("test_"):
+                    continue
+                words = set(method.name.lower().split("_"))
+                score = len(query & words)
+                if score:
+                    matches.append((score, f"{module}.{node.name}.{method.name}"))
+    matches.sort(key=lambda item: (-item[0], item[1]))
+    return [name for _, name in matches[:limit]]
+
+
+def build_verification_plan(
+    root: Path, command: str, changed_files: list[str], task_mode: str,
+    prompt: str, adaptive: bool,
+) -> dict[str, object]:
+    """Select the cheapest checks that still provide useful evidence."""
+    if not adaptive or task_mode != "small":
+        return {"strategy": "configured", "reason": "User-selected or standard-scope verification.",
+                "steps": [{"command": command, "role": "configured suite"}]}
+    if "unittest" not in command or not (root / "tests").is_dir():
+        return {"strategy": "configured", "reason": "No safe targeted adapter exists for this test runner yet.",
+                "steps": [{"command": command, "role": "configured suite"}]}
+
+    relative_files = [
+        str(Path(path).resolve().relative_to(root.resolve())) if Path(path).is_absolute() else path
+        for path in changed_files
+        if not Path(path).is_absolute() or Path(path).resolve().is_relative_to(root.resolve())
+    ]
+    high_risk_names = {
+        "pyproject.toml", "setup.py", "setup.cfg", "requirements.txt", "package.json",
+        "package-lock.json", "pom.xml", "Dockerfile",
+    }
+    if any(Path(path).name in high_risk_names for path in relative_files):
+        return {"strategy": "configured", "reason": "A dependency, build, or packaging file changed, so BuildBrake escalated.",
+                "steps": [{"command": command, "role": "configured suite"}]}
+    steps: list[dict[str, str]] = []
+    python_files = [path for path in relative_files if path.endswith(".py")]
+    if python_files:
+        compile_command = shlex.join([sys.executable, "-m", "py_compile", *python_files])
+        steps.append({"command": compile_command, "role": "syntax check"})
+    targets = targeted_unittest_commands(root, prompt, relative_files)
+    if targets:
+        test_command = shlex.join([
+            "/usr/bin/env", "PYTHONPATH=src", "python3", "-m", "unittest", *targets, "-v",
+        ])
+        steps.append({"command": test_command, "role": f"{len(targets)} relevant test{'s' if len(targets) != 1 else ''}"})
+    if not steps or not targets:
+        return {"strategy": "configured", "reason": "No relevant targeted tests were found, so BuildBrake escalated.",
+                "steps": [{"command": command, "role": "configured suite"}]}
+    recent_targeted = 0
+    found_completed_verification = False
+    for receipt in load_receipts(root):
+        verification = receipt.get("verification") or {}
+        strategy = verification.get("strategy") if isinstance(verification, dict) else None
+        if not strategy and not found_completed_verification:
+            continue
+        found_completed_verification = True
+        if strategy not in {"targeted", "targeted_then_full"}:
+            break
+        recent_targeted += 1
+    strategy = "targeted"
+    reason = f"Small task changed {len(relative_files)} file{'s' if len(relative_files) != 1 else ''}; matched tests by task and file names."
+    if recent_targeted >= 4:
+        steps.append({"command": command, "role": "periodic regression suite"})
+        strategy = "targeted_then_full"
+        reason += " This is the fifth targeted run, so the full suite is included as a regression check."
+    return {
+        "strategy": strategy,
+        "reason": reason,
+        "steps": steps,
+    }
+
+
 def run_verification(
     root: Path, receipt_path: Path, command: str, human_review_required: bool = False,
+    adaptive: bool = False, task_mode: str = "standard", prompt: str = "",
 ) -> int:
-    print(f"\nVerifying outcome: {command}")
-    try:
-        arguments = shlex.split(command)
-        if not arguments:
-            raise ValueError("verification command is empty")
-        completed = subprocess.run(
-            arguments, cwd=root, text=True, stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT, timeout=120, check=False,
-        )
-        output = completed.stdout[-4_000:]
-        proved = completed.returncode == 0
-        verification = {"command": command, "exit_code": completed.returncode, "output": output}
-        evidence = f"Verification command exited {completed.returncode}."
-    except (ValueError, OSError, subprocess.TimeoutExpired) as exc:
-        proved = False
-        verification = {"command": command, "error": str(exc)}
-        evidence = f"Verification could not complete: {exc}"
+    receipt_data = json.loads(receipt_path.read_text())
+    changed_files = receipt_data.get("changed_files") or []
+    changed_files = changed_files if isinstance(changed_files, list) else []
+    plan = build_verification_plan(root, command, changed_files, task_mode, prompt, adaptive)
+    print(f"\nVerification strategy: {plan['strategy']} · {plan['reason']}")
+    executed_steps: list[dict[str, object]] = []
+    proved = True
+    failure_evidence = ""
+    for planned_step in plan["steps"]:
+        step = dict(planned_step)
+        step_command = str(step["command"])
+        print(f"Verifying ({step['role']}): {step_command}")
+        step_started = time.monotonic()
+        try:
+            arguments = shlex.split(step_command)
+            if not arguments:
+                raise ValueError("verification command is empty")
+            completed = subprocess.run(
+                arguments, cwd=root, text=True, stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT, timeout=120, check=False,
+            )
+            step.update({"exit_code": completed.returncode, "output": completed.stdout[-4_000:]})
+            if completed.returncode != 0:
+                proved = False
+                failure_evidence = f"{step['role']} exited {completed.returncode}."
+        except (ValueError, OSError, subprocess.TimeoutExpired) as exc:
+            step["error"] = str(exc)
+            proved = False
+            failure_evidence = f"{step['role']} could not complete: {exc}"
+        step["elapsed_seconds"] = round(time.monotonic() - step_started, 2)
+        executed_steps.append(step)
+        if not proved:
+            break
+    verification = {
+        "command": command,
+        "strategy": plan["strategy"],
+        "reason": plan["reason"],
+        "steps": executed_steps,
+        "exit_code": 0 if proved else next(
+            (int(step["exit_code"]) for step in reversed(executed_steps) if "exit_code" in step), 1,
+        ),
+        "output": "\n".join(str(step.get("output") or "") for step in executed_steps)[-4_000:],
+        "elapsed_seconds": round(sum(float(step.get("elapsed_seconds") or 0) for step in executed_steps), 2),
+    }
+    evidence = "All selected verification steps passed." if proved else failure_evidence
     if proved and human_review_required:
         receipt = json.loads(receipt_path.read_text())
         receipt["verification"] = verification

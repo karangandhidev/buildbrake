@@ -548,7 +548,11 @@ async function refreshRuns(button) {
   }
 }
 function savedTaskResult(data) {
-  const verification = data.verification_command ? `<div class="muted">Automatic verification: ${esc(data.verification_command)}</div>` : '<div class="muted">Outcome will require human evaluation.</div>';
+  const verification = data.verification_command
+    ? data.verification_mode === 'adaptive'
+      ? '<div class="muted">Adaptive verification: BuildBrake will choose the smallest relevant checks after the files change.</div>'
+      : `<div class="muted">Automatic verification: ${esc(data.verification_command)}</div>`
+    : '<div class="muted">Outcome will require human evaluation.</div>';
   const estimate = data.cost_estimate ? `<div class="muted">Expected usage: ${data.cost_estimate.low_new_tokens.toLocaleString()}–${data.cost_estimate.high_new_tokens.toLocaleString()} new tokens · ${esc(data.cost_estimate.confidence)} confidence · based on ${data.cost_estimate.sample_count} ${esc(data.cost_estimate.basis)}</div>` : '<div class="muted">Expected usage: not enough previous runs to estimate</div>';
   return `<span class="good">Task passed and was saved.</span>${data.mode ? `<div>${esc(data.mode)} mode · ${data.budget_minutes} minute configured target</div>` : ''}${estimate}${verification}<button class="run-task-button" type="button" onclick="runAgent()">Run task</button><details class="terminal-alternative"><summary>Terminal alternative</summary><div class="command-box" role="button" tabindex="0" aria-label="Copy command" onclick="copyCommand(this)" onkeydown="if(event.key === 'Enter' || event.key === ' '){ event.preventDefault(); copyCommand(this); }"><code>${esc(projectRelative(data.command))}</code><button type="button" aria-label="Copy command"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><g class="copy-glyph"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></g><path class="copy-check" d="m5 12 4 4L19 6"></path></svg></button></div></details>`;
 }
@@ -758,8 +762,11 @@ async function loadState(populateForm = false) {
       : '';
     const findingTitle = r.interpretation ? "Agent's raw finding" : "Agent's final finding";
     const finding = r.agent_events?.final_message ? `<details class="finding"><summary>${findingTitle}</summary><pre>${esc(projectRelative(r.agent_events.final_message))}</pre></details>` : '';
+    const verificationSteps = Array.isArray(r.verification?.steps) && r.verification.steps.length
+      ? r.verification.steps.map(step => `<small>${esc(step.role || 'check')} · ${step.exit_code === 0 ? 'passed' : `failed${step.exit_code == null ? '' : ` (exit ${step.exit_code})`}`}${step.elapsed_seconds == null ? '' : ` · ${duration(step.elapsed_seconds)}`}<br>${esc(projectRelative(step.command))}</small>`).join('<br>')
+      : r.verification?.command ? `<small>${esc(projectRelative(r.verification.command))}</small>` : '';
     const verificationRun = r.verification?.command
-      ? `<div class="run-interpretation ${r.verification.exit_code === 0 ? 'good' : 'bad'}"><strong>BuildBrake verification</strong><br>Ran after the agent finished · ${r.verification.exit_code === 0 ? 'passed' : `failed (exit ${r.verification.exit_code})`}<br><small>${esc(projectRelative(r.verification.command))}</small></div>`
+      ? `<div class="run-interpretation ${r.verification.exit_code === 0 ? 'good' : 'bad'}"><strong>BuildBrake verification · ${esc(r.verification.strategy || 'configured')}</strong><br>Ran after the agent finished · ${r.verification.exit_code === 0 ? 'passed' : `failed (exit ${r.verification.exit_code})`}${r.verification.reason ? `<br><span class="muted">${esc(r.verification.reason)}</span>` : ''}<br>${verificationSteps}</div>`
       : '<div class="run-interpretation muted"><strong>BuildBrake verification</strong><br>Not run · no verification command was supplied.</div>';
     const efficiency = r.efficiency;
     const resourceNames = {new_tokens: 'New tokens', commands: 'Commands', files: 'Files changed', runtime: 'Runtime'};

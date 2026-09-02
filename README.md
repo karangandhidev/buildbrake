@@ -111,7 +111,9 @@ For ordinary work, enter one sentence under **What should the agent do?** BuildB
 
 After saving, click **Run task** in the dashboard. Live readable progress, elapsed time, and a **Stop agent** control remain on the page; the completed receipt appears automatically. The terminal command is retained under **Terminal alternative** for automation and advanced use.
 
-Add a **Verification command** when the outcome can be checked automatically. BuildBrake runs it after the agent exits: code `0` marks the receipt proved; any other result marks it not proved. Leave it blank for outcomes that genuinely require human judgment.
+Quick tasks use adaptive verification. After the agent exits, BuildBrake examines the files that actually changed, compiles changed Python files, and selects matching unittest methods from their names. If it cannot find a trustworthy targeted check, it escalates to the detected project suite. Receipts record the strategy, reason, every command, and each result, so a targeted check is never presented as a full-suite pass.
+
+Add a **Verification command** in Advanced task details when you need one exact command. Explicit commands and standard-size tasks run as configured: code `0` marks the receipt proved; any other result marks it not proved. Leave it blank for outcomes that genuinely require human judgment.
 
 Quick tasks describing subjective outcomes—such as more appealing, intuitive, polished, or easier to use—do not use passing tests as proof. Tests can establish that behavior did not break, but the receipt remains unevaluated until a person reviews the visual or usability result.
 

@@ -548,9 +548,11 @@ class BuildBrakeTests(unittest.TestCase):
                 self.assertEqual(data["mode"], "small")
                 self.assertEqual(data["budget_minutes"], 3)
                 self.assertIn("unittest discover", data["verification_command"])
+                self.assertEqual(data["verification_mode"], "adaptive")
                 task = json.loads((root / ".buildbrake/task.json").read_text())
                 self.assertEqual(task["prompt"], prompt)
                 self.assertEqual(task["mode"], "small")
+                self.assertEqual(task["verification_mode"], "adaptive")
                 self.assertTrue(task["human_review_required"])
                 self.assertTrue(data["human_review_required"])
                 contract = json.loads((root / ".buildbrake/outcome.json").read_text())
@@ -1152,6 +1154,109 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertIn(f"run this exact command after the agent exits: {command}", instruction)
         self.assertIn("Do not run or replace this command yourself", instruction)
         self.assertEqual(agent_verification_instruction(None), "")
+        adaptive = agent_verification_instruction(command, adaptive=True)
+        self.assertIn("smallest relevant checks", adaptive)
+        self.assertNotIn("exact command", adaptive)
+
+    def test_adaptive_verification_selects_matching_unittest_instead_of_full_suite(self):
+        from buildbrake.cli import build_verification_plan, run_verification
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "src").mkdir()
+            (root / "src/widget.py").write_text("VALUE = 1\n")
+            (root / "tests").mkdir()
+            (root / "tests/__init__.py").write_text("")
+            (root / "tests/test_widget.py").write_text(
+                "import unittest\n"
+                "class WidgetTests(unittest.TestCase):\n"
+                "    def test_button_spacing(self):\n"
+                "        self.assertTrue(True)\n"
+                "    def test_database_migration(self):\n"
+                "        self.fail('unrelated test must not run')\n"
+            )
+            prompt = "Adjust the widget button spacing without changing behavior"
+            changed = [str(root / "src/widget.py"), str(root / "tests/test_widget.py")]
+            full_suite = "python3 -m unittest discover -s tests -v"
+            plan = build_verification_plan(
+                root, full_suite, changed,
+                "small", prompt, adaptive=True,
+            )
+            self.assertEqual(plan["strategy"], "targeted")
+            self.assertIn("test_button_spacing", plan["steps"][-1]["command"])
+            self.assertNotIn("test_database_migration", plan["steps"][-1]["command"])
+
+            receipt = root / "receipt.json"
+            receipt.write_text(json.dumps({"changed_files": changed}))
+            result = run_verification(
+                root, receipt, full_suite,
+                adaptive=True, task_mode="small", prompt=prompt,
+            )
+            self.assertEqual(result, 0)
+            saved = json.loads(receipt.read_text())
+            self.assertEqual(saved["verification"]["strategy"], "targeted")
+            self.assertEqual(len(saved["verification"]["steps"]), 2)
+            self.assertIn("elapsed_seconds", saved["verification"])
+            self.assertIn("elapsed_seconds", saved["verification"]["steps"][0])
+
+    def test_adaptive_verification_escalates_when_no_targeted_test_matches(self):
+        from buildbrake.cli import build_verification_plan
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "tests").mkdir()
+            (root / "tests/test_other.py").write_text(
+                "import unittest\nclass Other(unittest.TestCase):\n"
+                "    def test_database_backup(self): self.assertTrue(True)\n"
+            )
+            command = "python3 -m unittest discover -s tests -v"
+            plan = build_verification_plan(
+                root, command, ["src/colors.css"], "small",
+                "Adjust navigation typography", adaptive=True,
+            )
+            self.assertEqual(plan["strategy"], "configured")
+            self.assertEqual(plan["steps"][0]["command"], command)
+
+    def test_adaptive_verification_escalates_for_packaging_changes(self):
+        from buildbrake.cli import build_verification_plan
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "tests").mkdir()
+            plan = build_verification_plan(
+                root, "python3 -m unittest discover -s tests -v", ["pyproject.toml"],
+                "small", "Update the supported Python package version", adaptive=True,
+            )
+            self.assertEqual(plan["strategy"], "configured")
+            self.assertIn("packaging file", plan["reason"])
+
+    def test_fifth_targeted_verification_includes_regression_suite(self):
+        from buildbrake.cli import build_verification_plan
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "tests").mkdir()
+            (root / "tests/__init__.py").write_text("")
+            (root / "tests/test_widget.py").write_text(
+                "import unittest\nclass Widget(unittest.TestCase):\n"
+                "    def test_button_color(self): self.assertTrue(True)\n"
+            )
+            receipts = root / ".buildbrake/receipts"
+            receipts.mkdir(parents=True)
+            (receipts / "9-current.json").write_text(json.dumps({
+                "agent_prompt": "current run is awaiting verification",
+            }))
+            for index in range(4):
+                (receipts / f"{index}.json").write_text(json.dumps({
+                    "verification": {"strategy": "targeted"},
+                }))
+            command = "python3 -m unittest discover -s tests -v"
+            plan = build_verification_plan(
+                root, command, ["src/widget.py"], "small",
+                "Adjust the widget button color", adaptive=True,
+            )
+            self.assertEqual(plan["strategy"], "targeted_then_full")
+            self.assertEqual(plan["steps"][-1]["role"], "periodic regression suite")
 
     def test_agent_parser_offers_fresh_thread_override(self):
         from buildbrake.cli import build_parser

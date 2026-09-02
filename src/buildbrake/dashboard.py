@@ -394,6 +394,7 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
             (folder / TASK_FILE).write_text(json.dumps({
                 "prompt": body["prompt"].strip(),
                 "verification_command": verification_command.strip() or None,
+                "verification_mode": "explicit" if verification_command.strip() else None,
                 "mode": mode,
                 "human_review_required": human_review,
                 "saved_at": now(),
@@ -404,6 +405,7 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
             self.send_bytes(200, "application/json", json_bytes({
                 "decision": "PASS", "command": command, "mode": mode,
                 "budget_minutes": budget, "verification_command": verification_command.strip() or None,
+                "verification_mode": "explicit" if verification_command.strip() else None,
                 "human_review_required": human_review,
                 "cost_estimate": cost_estimate,
             }))
@@ -442,6 +444,7 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
             (folder / TASK_FILE).write_text(json.dumps({
                 "prompt": prompt, "verification_command": verification, "mode": mode,
                 "saved_at": now(), "created_with": "quick_task",
+                "verification_mode": "adaptive",
                 "human_review_required": human_review,
             }, indent=2) + "\n")
             command = dashboard_agent_command(root, mode)
@@ -450,6 +453,7 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
             self.send_bytes(200, "application/json", json_bytes({
                 "decision": "PASS", "command": command, "mode": mode,
                 "budget_minutes": budget, "verification_command": verification,
+                "verification_mode": "adaptive",
                 "success": contract.success, "human_review_required": human_review,
                 "cost_estimate": cost_estimate,
             }))
