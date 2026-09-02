@@ -491,15 +491,13 @@ function updateTaskSizeWarning(form) {
     return;
   }
   const words = new Set(promptWords);
-  const broad = ['redesign', 'application', 'codebase', 'project', 'repository'].some(word => words.has(word)) ||
+  const broad = ['architecture', 'migrate', 'migration', 'overhaul', 'redo', 'redesign', 'refactor', 'restyle', 'revamp', 'rewrite'].some(word => words.has(word)) ||
     ['complete redesign', 'entire application', 'entire codebase', 'entire project', 'entire repository'].some(phrase => prompt.includes(phrase));
   const actions = (prompt.match(/\b(add|change|convert|divide|fix|make|match|move|remove|replace|rework|turn|update)\b/g) || []).length;
   const expected = broad || actions >= 4 ? 'standard' : 'small';
   warning.textContent = selected === 'small' && expected === 'standard'
     ? 'Warning: this task looks standard-sized. Choose Standard for broader work.'
-    : selected === 'standard' && expected === 'small'
-      ? 'Warning: this task looks small-sized. Choose Small to keep limits tight.'
-      : '';
+    : '';
 }
 for (const form of document.querySelectorAll('#quick-task-form, #task-form')) {
   form.addEventListener('input', () => updateTaskSizeWarning(form));

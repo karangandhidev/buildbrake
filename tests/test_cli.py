@@ -99,6 +99,10 @@ class BuildBrakeTests(unittest.TestCase):
         clear_form = html[html.index('function clearQuickTaskForm()'):html.index('function updateTaskSizeWarning(form)')]
         self.assertIn("form.reset();", clear_form)
         self.assertIn("updateTaskSizeWarning(form);", clear_form)
+        self.assertNotIn("this task looks small-sized", html)
+        self.assertIn("'architecture', 'migrate', 'migration', 'overhaul'", html)
+        warning_logic = html[html.index('function updateTaskSizeWarning(form)'):html.index("for (const form of document.querySelectorAll")]
+        self.assertNotIn("['redesign', 'application', 'codebase', 'project', 'repository']", warning_logic)
 
     def test_terminal_copy_icon_uses_same_smooth_fade_as_thread_copy(self):
         html = (ROOT / "src/buildbrake/static/index.html").read_text()
