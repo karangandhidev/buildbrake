@@ -497,7 +497,9 @@ function updateTaskSizeWarning(form) {
   const expected = broad || actions >= 4 ? 'standard' : 'small';
   warning.textContent = selected === 'small' && expected === 'standard'
     ? 'Warning: this task looks standard-sized. Choose Standard for broader work.'
-    : '';
+    : selected === 'standard' && expected === 'small'
+      ? 'Possible waste: this task looks small. Choose Auto or Small for tighter limits.'
+      : '';
 }
 for (const form of document.querySelectorAll('#quick-task-form, #task-form')) {
   form.addEventListener('input', () => updateTaskSizeWarning(form));

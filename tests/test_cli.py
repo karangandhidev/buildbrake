@@ -99,7 +99,7 @@ class BuildBrakeTests(unittest.TestCase):
         clear_form = html[html.index('function clearQuickTaskForm()'):html.index('function updateTaskSizeWarning(form)')]
         self.assertIn("form.reset();", clear_form)
         self.assertIn("updateTaskSizeWarning(form);", clear_form)
-        self.assertNotIn("this task looks small-sized", html)
+        self.assertIn("Possible waste: this task looks small. Choose Auto or Small for tighter limits.", html)
         self.assertIn("'architecture', 'migrate', 'migration', 'overhaul'", html)
         warning_logic = html[html.index('function updateTaskSizeWarning(form)'):html.index("for (const form of document.querySelectorAll")]
         self.assertNotIn("['redesign', 'application', 'codebase', 'project', 'repository']", warning_logic)
