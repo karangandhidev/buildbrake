@@ -16,6 +16,21 @@ CLI = [sys.executable, "-m", "buildbrake.cli"]
 
 
 class BuildBrakeTests(unittest.TestCase):
+    def test_task_cost_estimate_prefers_similar_runs_and_uses_median(self):
+        from buildbrake.cli import estimate_task_cost
+
+        def run(prompt, tokens):
+            return {"run_type": "ai_agent", "task_mode": "small", "agent_prompt": prompt,
+                    "agent_events": {"usage": {"input_tokens": tokens, "cached_input_tokens": 0}}}
+        estimate = estimate_task_cost([
+            run("adjust receipt button spacing", 10_000),
+            run("fix receipt button alignment", 20_000),
+            run("change database parser", 90_000),
+        ], "fix receipt button padding", "small")
+        self.assertEqual(estimate["median_new_tokens"], 15_000)
+        self.assertEqual(estimate["sample_count"], 2)
+        self.assertEqual(estimate["basis"], "similar tasks")
+
     def test_model_performance_compares_small_runs_with_medians_and_proof_rate(self):
         from buildbrake.cli import model_performance
 

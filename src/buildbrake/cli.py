@@ -229,6 +229,36 @@ def load_receipts(root: Path) -> list[dict[str, object]]:
     return results
 
 
+def estimate_task_cost(
+    receipts: list[dict[str, object]], prompt: str, mode: str,
+) -> dict[str, object] | None:
+    """Estimate new-token cost from comparable completed runs, with a mode fallback."""
+    comparable: list[int] = []
+    same_mode: list[int] = []
+    for receipt in receipts:
+        if receipt.get("run_type") != "ai_agent" or receipt.get("task_mode") != mode:
+            continue
+        events = receipt.get("agent_events") or {}
+        usage = events.get("usage") if isinstance(events, dict) else None
+        if not isinstance(usage, dict) or usage.get("input_tokens") is None:
+            continue
+        cost = max(0, int(usage.get("input_tokens") or 0) - int(usage.get("cached_input_tokens") or 0))
+        same_mode.append(cost)
+        if task_similarity(prompt, str(receipt.get("agent_prompt") or "")) >= 0.15:
+            comparable.append(cost)
+    samples = comparable or same_mode
+    if not samples:
+        return None
+    ordered = sorted(samples)
+    middle = len(ordered) // 2
+    median = ordered[middle] if len(ordered) % 2 else (ordered[middle - 1] + ordered[middle]) // 2
+    return {
+        "median_new_tokens": median,
+        "sample_count": len(samples),
+        "basis": "similar tasks" if comparable else f"all {mode} tasks",
+    }
+
+
 def model_performance(receipts: list[dict[str, object]]) -> list[dict[str, object]]:
     """Summarize comparable small-task results without letting outliers dominate."""
     groups: dict[str, list[dict[str, object]]] = {}

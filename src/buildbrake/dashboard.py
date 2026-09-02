@@ -15,7 +15,8 @@ from urllib.parse import quote, urlparse
 
 from buildbrake.cli import (
     CONTRACT_FILE, RECEIPTS_DIR, STATE_DIR, TASK_FILE, calculate_efficiency,
-    codex_thread_rotation_reason, load_codex_thread, model_performance, parse_codex_events,
+    codex_thread_rotation_reason, estimate_task_cost, load_codex_thread, load_receipts,
+    model_performance, parse_codex_events,
 )
 
 
@@ -222,6 +223,11 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
                         item["interpretation"] = receipt_interpretation(item)
                         receipts.append(item)
                 saved_thread = load_codex_thread(root)
+                saved_task_path = root / STATE_DIR / TASK_FILE
+                saved_task = json.loads(saved_task_path.read_text()) if saved_task_path.is_file() else None
+                cost_estimate = estimate_task_cost(
+                    receipts, str(saved_task.get("prompt") or ""), str(saved_task.get("mode") or "small")
+                ) if isinstance(saved_task, dict) else None
                 self.send_bytes(200, "application/json", json_bytes({
                     "contract": contract, "receipts": receipts, "active_run": run_manager.snapshot(),
                     "model_performance": model_performance(receipts),
@@ -229,6 +235,7 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
                     "codex_context_saved": saved_thread is not None,
                     "codex_context_rotation_reason": codex_thread_rotation_reason(root, saved_thread) if saved_thread else None,
                     "task_saved": (root / STATE_DIR / TASK_FILE).is_file(),
+                    "task_cost_estimate": cost_estimate,
                     "restart_required": backend_source_fingerprint() != startup_fingerprint,
                 }))
                 return
@@ -376,10 +383,12 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
                 "saved_at": now(),
             }, indent=2) + "\n")
             command = dashboard_agent_command(root, mode)
+            cost_estimate = estimate_task_cost(load_receipts(root), body["prompt"], mode)
             self.send_bytes(200, "application/json", json_bytes({
                 "decision": "PASS", "command": command, "mode": mode,
                 "budget_minutes": budget, "verification_command": verification_command.strip() or None,
                 "human_review_required": human_review,
+                "cost_estimate": cost_estimate,
             }))
 
         def save_quick_task(self) -> None:
@@ -419,10 +428,12 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
                 "human_review_required": human_review,
             }, indent=2) + "\n")
             command = dashboard_agent_command(root, mode)
+            cost_estimate = estimate_task_cost(load_receipts(root), prompt, mode)
             self.send_bytes(200, "application/json", json_bytes({
                 "decision": "PASS", "command": command, "mode": mode,
                 "budget_minutes": budget, "verification_command": verification,
                 "success": contract.success, "human_review_required": human_review,
+                "cost_estimate": cost_estimate,
             }))
 
         def log_message(self, format: str, *args: object) -> None:
