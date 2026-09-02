@@ -992,7 +992,9 @@ def run_agent(args: argparse.Namespace) -> int:
     manifest_context = "Known project files:\n" + "\n".join(f"- {path}" for path in manifest) + "\n" if manifest else ""
     saved_thread_id = None if getattr(args, "fresh", False) else load_codex_thread(root)
     requested_model = getattr(args, "model", "auto")
-    performance = model_performance(load_receipts(root))
+    historical_receipts = load_receipts(root)
+    performance = model_performance(historical_receipts)
+    cost_estimate = estimate_task_cost(historical_receipts, prompt, task_mode)
     agent_model = select_agent_model(task_mode, requested_model, performance)
     if requested_model == "auto":
         _, model_decision = automatic_model_decision(task_mode, performance)
@@ -1075,6 +1077,9 @@ def run_agent(args: argparse.Namespace) -> int:
             "agent_model": agent_model or "user_default",
             "agent_model_decision": model_decision,
             "human_review_required": human_review_required,
+            "estimated_new_tokens": cost_estimate.get("median_new_tokens") if cost_estimate else None,
+            "cost_estimate_samples": cost_estimate.get("sample_count") if cost_estimate else 0,
+            "cost_estimate_basis": cost_estimate.get("basis") if cost_estimate else None,
         },
         scope_limits=limits,
     )

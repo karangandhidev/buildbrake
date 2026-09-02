@@ -727,6 +727,13 @@ async function loadState(populateForm = false) {
           ? 'Unavailable · agent stopped before Codex reported final usage'
           : 'Usage was not reported')
       : `${newTokens.toLocaleString()} new · ${cachedTokens.toLocaleString()} cached · ${totalTokens.toLocaleString()} total`;
+    const estimateDifference = newTokens != null && r.estimated_new_tokens
+      ? Math.round((newTokens - r.estimated_new_tokens) / r.estimated_new_tokens * 100)
+      : null;
+    const estimateResult = estimateDifference === 0 ? 'actual matched estimate'
+      : `actual was ${Math.abs(estimateDifference).toLocaleString()}% ${estimateDifference > 0 ? 'above' : 'below'} estimate`;
+    const estimateComparison = estimateDifference == null ? ''
+      : `<small>Pre-run estimate: ${r.estimated_new_tokens.toLocaleString()} · ${estimateResult}</small>`;
     const contextDecision = r.context_decision || (r.context_rotation_reason
       ? 'started_fresh_automatically' : r.thread_reused ? 'reused_existing_thread' : 'started_fresh_manually');
     const contextLabels = {
@@ -778,7 +785,7 @@ async function loadState(populateForm = false) {
             <div><strong>Run details</strong>${r.task_mode ? `${esc(r.task_mode)} mode · ${esc(r.agent_model === 'user_default' || !r.agent_model ? 'default model' : r.agent_model)} · ${esc(r.agent_reasoning_effort === 'user_default' ? 'default' : r.agent_reasoning_effort || 'default') } reasoning` : '—'}${r.agent_model_decision ? `<br><small>${esc(r.agent_model_decision)}</small>` : ''}</div>
           </div>${interpretation}${finding}<div class="decision">${label}</div>
         </div>
-        <aside class="run-resources"><div><strong>Usage</strong><span class="usage-value">${usage}</span></div><div><strong>Resource comparison</strong>${efficiencyLabel}${costDiagnosis}</div></aside>
+        <aside class="run-resources"><div><strong>Usage</strong><span class="usage-value">${usage}</span>${estimateComparison}</div><div><strong>Resource comparison</strong>${efficiencyLabel}${costDiagnosis}</div></aside>
       </div>
     </article>`;
   }).join('') : '<div class="empty">No guarded runs yet.</div>';

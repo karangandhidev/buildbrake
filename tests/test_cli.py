@@ -31,6 +31,14 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertEqual(estimate["sample_count"], 2)
         self.assertEqual(estimate["basis"], "similar tasks")
 
+    def test_agent_receipt_records_pre_run_cost_estimate_for_comparison(self):
+        source = (ROOT / "src/buildbrake/cli.py").read_text()
+        html = (ROOT / "src/buildbrake/static/index.html").read_text()
+        self.assertIn('"estimated_new_tokens": cost_estimate.get("median_new_tokens")', source)
+        self.assertIn("Pre-run estimate:", html)
+        self.assertIn("actual was ${Math.abs(estimateDifference).toLocaleString()}%", html)
+        self.assertIn("actual matched estimate", html)
+
     def test_model_performance_compares_small_runs_with_medians_and_proof_rate(self):
         from buildbrake.cli import model_performance
 
