@@ -230,6 +230,57 @@ def load_receipts(root: Path) -> list[dict[str, object]]:
     return results
 
 
+def forecast_performance(
+    receipts: list[dict[str, object]], mode: str | None = None,
+    model: str | None = None, thread_reused: bool | None = None,
+) -> dict[str, object]:
+    """Measure forecast coverage and midpoint error from completed agent runs."""
+    observations: list[tuple[int, int, int]] = []
+    for receipt in receipts:
+        if receipt.get("run_type") != "ai_agent" or (mode and receipt.get("task_mode") != mode):
+            continue
+        if model is not None and str(receipt.get("agent_model") or "user_default") != model:
+            continue
+        if thread_reused is not None and receipt.get("thread_reused") is not thread_reused:
+            continue
+        midpoint = receipt.get("estimated_new_tokens")
+        if not isinstance(midpoint, (int, float)) or midpoint <= 0:
+            continue
+        events = receipt.get("agent_events") or {}
+        usage = events.get("usage") if isinstance(events, dict) else None
+        if not isinstance(usage, dict) or usage.get("input_tokens") is None:
+            continue
+        actual = max(0, int(usage.get("input_tokens") or 0) - int(usage.get("cached_input_tokens") or 0))
+        low = int(receipt.get("estimated_new_tokens_low") or midpoint)
+        high = int(receipt.get("estimated_new_tokens_high") or midpoint)
+        observations.append((actual, low, high))
+    if not observations:
+        return {"sample_count": 0, "coverage_rate": None, "median_error_percent": None,
+                "status": "collecting"}
+    errors = sorted(
+        abs(actual - ((low + high) / 2)) / actual * 100
+        for actual, low, high in observations if actual > 0
+    )
+    middle = len(errors) // 2
+    median_error = (
+        errors[middle] if len(errors) % 2
+        else (errors[middle - 1] + errors[middle]) / 2
+    ) if errors else 0.0
+    coverage = sum(low <= actual <= high for actual, low, high in observations) / len(observations)
+    status = (
+        "collecting" if len(observations) < 3
+        else "reliable" if coverage >= 0.75 and median_error <= 35
+        else "usable" if coverage >= 0.60
+        else "needs_calibration"
+    )
+    return {
+        "sample_count": len(observations),
+        "coverage_rate": round(coverage, 3),
+        "median_error_percent": round(median_error, 1),
+        "status": status,
+    }
+
+
 def estimate_task_cost(
     receipts: list[dict[str, object]], prompt: str, mode: str,
     model: str | None = None, thread_reused: bool | None = None,
@@ -275,6 +326,43 @@ def estimate_task_cost(
         high = ordered[round((len(ordered) - 1) * 0.90)]
     spread = (high - low) / median if median else 1.0
     confidence = "high" if len(ordered) >= 8 and spread <= 0.75 else "medium" if len(ordered) >= 3 else "low"
+    calibration = forecast_performance(receipts, mode, model, thread_reused)
+    lower_miss_ratios: list[float] = []
+    upper_miss_ratios: list[float] = []
+    calibration_samples = 0
+    for receipt in receipts:
+        if (
+            receipt.get("run_type") != "ai_agent" or receipt.get("task_mode") != mode
+            or receipt.get("cost_estimate_method") != "calibrated_range_v1"
+        ):
+            continue
+        if model is not None and str(receipt.get("agent_model") or "user_default") != model:
+            continue
+        if thread_reused is not None and receipt.get("thread_reused") is not thread_reused:
+            continue
+        predicted = receipt.get("estimated_new_tokens")
+        events = receipt.get("agent_events") or {}
+        usage = events.get("usage") if isinstance(events, dict) else None
+        if (
+            not isinstance(predicted, (int, float)) or predicted <= 0
+            or not isinstance(usage, dict) or usage.get("input_tokens") is None
+        ):
+            continue
+        actual = max(0, int(usage.get("input_tokens") or 0) - int(usage.get("cached_input_tokens") or 0))
+        predicted_low = int(receipt.get("estimated_new_tokens_low") or predicted)
+        predicted_high = int(receipt.get("estimated_new_tokens_high") or predicted)
+        calibration_samples += 1
+        if predicted_low > 0 and actual < predicted_low:
+            lower_miss_ratios.append(actual / predicted_low)
+        if predicted_high > 0 and actual > predicted_high:
+            upper_miss_ratios.append(actual / predicted_high)
+    if calibration_samples >= 3:
+        if lower_miss_ratios:
+            low = int(low * min(lower_miss_ratios))
+        if upper_miss_ratios:
+            high = int(high * max(upper_miss_ratios))
+        if calibration["coverage_rate"] is not None and float(calibration["coverage_rate"]) < 0.60:
+            confidence = "low" if confidence == "medium" else "medium" if confidence == "high" else confidence
     return {
         "median_new_tokens": median,
         "low_new_tokens": low,
@@ -282,6 +370,8 @@ def estimate_task_cost(
         "confidence": confidence,
         "sample_count": len(samples),
         "basis": basis,
+        "calibration_samples": calibration_samples,
+        "historical_coverage": calibration["coverage_rate"],
     }
 
 
@@ -1217,6 +1307,7 @@ def run_agent(args: argparse.Namespace) -> int:
             "cost_estimate_confidence": cost_estimate.get("confidence") if isinstance(cost_estimate, dict) else None,
             "cost_estimate_samples": cost_estimate.get("sample_count") if isinstance(cost_estimate, dict) else 0,
             "cost_estimate_basis": cost_estimate.get("basis") if isinstance(cost_estimate, dict) else None,
+            "cost_estimate_method": "calibrated_range_v1",
         },
         scope_limits=limits,
     )

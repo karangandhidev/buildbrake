@@ -15,8 +15,8 @@ from urllib.parse import quote, urlparse
 
 from buildbrake.cli import (
     CONTRACT_FILE, RECEIPTS_DIR, STATE_DIR, TASK_FILE, calculate_efficiency,
-    codex_thread_rotation_reason, load_codex_thread, load_receipts, model_performance,
-    parse_codex_events, plan_agent_run,
+    codex_thread_rotation_reason, forecast_performance, load_codex_thread, load_receipts,
+    model_performance, parse_codex_events, plan_agent_run,
 )
 
 
@@ -246,6 +246,7 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
                 self.send_bytes(200, "application/json", json_bytes({
                     "contract": contract, "receipts": receipts, "active_run": run_manager.snapshot(),
                     "model_performance": model_performance(receipts),
+                    "forecast_performance": forecast_performance(receipts),
                     "project_root": str(root.resolve()),
                     "codex_context_saved": saved_thread is not None,
                     "codex_context_rotation_reason": codex_thread_rotation_reason(root, saved_thread) if saved_thread else None,

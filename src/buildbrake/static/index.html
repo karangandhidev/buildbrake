@@ -656,7 +656,7 @@ async function loadState(populateForm = false) {
   try {
   const response = await fetch('/api/state', {cache: 'no-store'});
   if (!response.ok) throw new Error(`server returned ${response.status}`);
-  const {contract: c, receipts, active_run, project_root, codex_context_saved, codex_context_rotation_reason, task_saved, task_cost_estimate, task_run_plan, restart_required, model_performance = []} = await response.json();
+  const {contract: c, receipts, active_run, project_root, codex_context_saved, codex_context_rotation_reason, task_saved, task_cost_estimate, task_run_plan, restart_required, model_performance = [], forecast_performance = {}} = await response.json();
   projectRoot = project_root || '';
   document.querySelector('#project-location').textContent = projectRoot || 'Unknown project';
   savedCodexContext = codex_context_saved === true;
@@ -701,12 +701,18 @@ async function loadState(populateForm = false) {
   const lunaBenchmark = lunaPerformance
     ? `${lunaPerformance.median_new_tokens.toLocaleString()} median new tokens · ${duration(lunaPerformance.median_runtime_seconds)} median runtime · ${lunaProof}`
     : 'Benchmark begins after the next small task';
+  const forecastCoverage = forecast_performance.coverage_rate == null
+    ? '—' : `${Math.round(forecast_performance.coverage_rate * 100)}%`;
+  const forecastDetail = forecast_performance.sample_count
+    ? `${forecast_performance.sample_count} measured forecasts · ${forecast_performance.median_error_percent}% typical error · ${esc(forecast_performance.status.replaceAll('_', ' '))}`
+    : 'Accuracy appears after predicted runs complete';
   document.querySelector('#summary').innerHTML = `
     <div class="metric"><b>${proved}</b><span>outcomes proved</span></div>
     <div class="metric"><b>${receipts.length}</b><span>guarded runs</span></div>
     <div class="metric"><b>${duration(total)}</b><span>total runtime</span></div>
     <div class="metric"><b>${reusedRuns.length}</b><span>context-reused runs</span><small>${contextComparison}</small></div>
-    <div class="metric"><b>${lunaPerformance?.runs || 0}</b><span>Luna small-task runs <span class="context-info" tabindex="0" role="img" aria-label="Benchmark uses evaluated small tasks and median new tokens to avoid distortion from unusually expensive runs.">i</span></span><small>${lunaBenchmark}</small></div>`;
+    <div class="metric"><b>${lunaPerformance?.runs || 0}</b><span>Luna small-task runs <span class="context-info" tabindex="0" role="img" aria-label="Benchmark uses evaluated small tasks and median new tokens to avoid distortion from unusually expensive runs.">i</span></span><small>${lunaBenchmark}</small></div>
+    <div class="metric"><b>${forecastCoverage}</b><span>forecasts inside range <span class="context-info" tabindex="0" role="img" aria-label="Coverage measures how often actual new-token usage landed inside BuildBrake's predicted range. Target: at least 75%.">i</span></span><small>${forecastDetail}</small></div>`;
   const runsElement = document.querySelector('#runs');
   const openFindings = new Set(
     [...runsElement.querySelectorAll('.run details[open]')].map(details => details.closest('.run')?.dataset.receipt)

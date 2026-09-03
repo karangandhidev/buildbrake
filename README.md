@@ -80,6 +80,8 @@ Agent receipts are explicitly marked with `"run_type": "ai_agent"` and include t
 
 Before Codex starts, one shared run planner chooses the model and fresh/reused context used by both the dashboard preview and the runner. With at least three comparable observations for each context choice, it starts fresh when predicted reuse cost is more than 25% higher. Otherwise it keeps available project context. The recommendation, evidence, expected token range, and eventual decision are visible in the dashboard and saved receipt.
 
+Forecasts are calibrated against completed runs. The dashboard reports how often actual new-token usage landed inside the predicted range and the typical percentage error. After three matching forecasts, BuildBrake widens future ranges using observed misses and lowers confidence when historical coverage is below 60%.
+
 BuildBrake pauses at the configured interval and asks whether the work is still moving toward the stated result. If you answer `n`, it stops the entire command process. It also stops automatically when the budget expires.
 
 Inspect the current outcome and latest run:

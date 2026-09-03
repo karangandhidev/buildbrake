@@ -60,6 +60,44 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertEqual(estimate["median_new_tokens"], 12_000)
         self.assertEqual(estimate["basis"], "same model, context, and similar tasks")
 
+    def test_forecast_performance_measures_range_coverage_and_typical_error(self):
+        from buildbrake.cli import forecast_performance
+
+        def receipt(actual, low, high):
+            return {
+                "run_type": "ai_agent", "task_mode": "small",
+                "estimated_new_tokens": (low + high) // 2,
+                "estimated_new_tokens_low": low, "estimated_new_tokens_high": high,
+                "agent_events": {"usage": {"input_tokens": actual, "cached_input_tokens": 0}},
+            }
+
+        result = forecast_performance([
+            receipt(100, 80, 120), receipt(200, 80, 120), receipt(90, 80, 120),
+        ])
+        self.assertEqual(result["sample_count"], 3)
+        self.assertEqual(result["coverage_rate"], 0.667)
+        self.assertEqual(result["median_error_percent"], 11.1)
+        self.assertEqual(result["status"], "usable")
+
+    def test_cost_estimate_widens_from_observed_range_misses(self):
+        from buildbrake.cli import estimate_task_cost
+
+        def receipt(actual, predicted_high):
+            return {
+                "run_type": "ai_agent", "task_mode": "small", "agent_model": "model-a",
+                "thread_reused": True, "agent_prompt": "adjust button spacing",
+                "estimated_new_tokens": 10_000, "estimated_new_tokens_low": 8_000,
+                "estimated_new_tokens_high": predicted_high,
+                "cost_estimate_method": "calibrated_range_v1",
+                "agent_events": {"usage": {"input_tokens": actual, "cached_input_tokens": 0}},
+            }
+
+        estimate = estimate_task_cost([
+            receipt(10_000, 12_000), receipt(12_000, 12_000), receipt(24_000, 12_000),
+        ], "adjust button spacing", "small", "model-a", True)
+        self.assertEqual(estimate["calibration_samples"], 3)
+        self.assertGreaterEqual(estimate["high_new_tokens"], 24_000)
+
     def test_run_plan_uses_observed_context_costs_and_matches_runner_decision(self):
         from buildbrake.cli import plan_agent_run, save_codex_thread
 
