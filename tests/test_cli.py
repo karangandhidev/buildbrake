@@ -60,6 +60,44 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertEqual(estimate["median_new_tokens"], 12_000)
         self.assertEqual(estimate["basis"], "same model, context, and similar tasks")
 
+    def test_run_plan_uses_observed_context_costs_and_matches_runner_decision(self):
+        from buildbrake.cli import plan_agent_run, save_codex_thread
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / ".buildbrake").mkdir()
+            save_codex_thread(root, "thread-12345678", "gpt-5.6-luna")
+
+            def run(tokens, reused):
+                return {
+                    "run_type": "ai_agent", "task_mode": "small",
+                    "agent_prompt": "adjust receipt button spacing",
+                    "agent_model": "gpt-5.6-luna", "thread_reused": reused,
+                    "agent_events": {"usage": {"input_tokens": tokens, "cached_input_tokens": 0}},
+                }
+
+            receipts = [
+                run(30_000, True), run(33_000, True), run(36_000, True),
+                run(9_000, False), run(10_000, False), run(11_000, False),
+            ]
+            plan = plan_agent_run(
+                root, "adjust receipt button spacing", "small", receipts=receipts,
+            )
+            self.assertEqual(plan["model"], "gpt-5.6-luna")
+            self.assertEqual(plan["context_decision"], "started_fresh_automatically")
+            self.assertIsNone(plan["thread_id"])
+            self.assertIn("predicted reuse cost", plan["context_reason"])
+            self.assertEqual(plan["cost_estimate"]["median_new_tokens"], 10_000)
+
+    def test_first_run_is_not_mislabeled_as_manual_fresh_override(self):
+        from buildbrake.cli import plan_agent_run
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            plan = plan_agent_run(root, "adjust receipt button spacing", "small", receipts=[])
+            self.assertEqual(plan["context_decision"], "started_fresh_initially")
+            self.assertIn("No reusable", plan["context_reason"])
+
     def test_model_performance_compares_small_runs_with_medians_and_proof_rate(self):
         from buildbrake.cli import model_performance
 
@@ -790,6 +828,7 @@ class BuildBrakeTests(unittest.TestCase):
         from buildbrake.dashboard import dashboard_html
 
         source = (ROOT / "src/buildbrake/cli.py").read_text()
+        self.assertIn("run_plan = plan_agent_run(", source)
         self.assertIn('"context_decision": context_decision', source)
         self.assertIn('"previous_reuse_cost":', source)
         self.assertIn('"predicted_fresh_cost":', source)

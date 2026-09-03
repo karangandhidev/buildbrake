@@ -78,6 +78,8 @@ buildbrake preflight --prompt "Update README usage instructions so a new user ca
 
 Agent receipts are explicitly marked with `"run_type": "ai_agent"` and include the Codex thread ID, selected model, event counts, file changes, final message, and reported token usage. After the first successful run, BuildBrake reuses that project's Codex thread while measured reuse remains cheaper than a comparable fresh run. When reuse becomes expensive, it starts a new thread with a compact handoff containing likely files and verification learned from similar proved tasks. The saved thread stays inside the Git-ignored `.buildbrake/` directory and is not shared with other projects. Select **Force fresh context** in the dashboard, or use `buildbrake agent --fresh --prompt "..."`, when you intentionally want a clean thread. Live terminal output is translated into readable AI updates rather than raw JSON. BuildBrake uses Codex's `workspace-write` sandbox by default; use `--sandbox read-only` for analysis-only tasks.
 
+Before Codex starts, one shared run planner chooses the model and fresh/reused context used by both the dashboard preview and the runner. With at least three comparable observations for each context choice, it starts fresh when predicted reuse cost is more than 25% higher. Otherwise it keeps available project context. The recommendation, evidence, expected token range, and eventual decision are visible in the dashboard and saved receipt.
+
 BuildBrake pauses at the configured interval and asks whether the work is still moving toward the stated result. If you answer `n`, it stops the entire command process. It also stops automatically when the budget expires.
 
 Inspect the current outcome and latest run:

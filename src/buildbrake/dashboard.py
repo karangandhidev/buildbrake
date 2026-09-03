@@ -15,9 +15,8 @@ from urllib.parse import quote, urlparse
 
 from buildbrake.cli import (
     CONTRACT_FILE, RECEIPTS_DIR, STATE_DIR, TASK_FILE, calculate_efficiency,
-    codex_thread_rotation_reason, estimate_task_cost, load_codex_thread,
-    load_codex_thread_model, load_receipts, model_performance, parse_codex_events,
-    select_agent_model,
+    codex_thread_rotation_reason, load_codex_thread, load_receipts, model_performance,
+    parse_codex_events, plan_agent_run,
 )
 
 
@@ -169,18 +168,17 @@ def dashboard_agent_command(root: Path, mode: str = "auto") -> str:
     return shlex.join(command)
 
 
-def dashboard_cost_estimate(
+def dashboard_run_plan(
     root: Path, receipts: list[dict[str, object]], prompt: str, mode: str,
-) -> dict[str, object] | None:
-    """Predict using the model and context the dashboard-run agent will actually use."""
-    model = select_agent_model(mode, "auto", model_performance(receipts))
-    saved_thread = load_codex_thread(root)
-    saved_model = load_codex_thread_model(root) if saved_thread else None
-    reused = bool(
-        saved_thread and saved_model == model
-        and not codex_thread_rotation_reason(root, saved_thread, mode, prompt)
-    )
-    return estimate_task_cost(receipts, prompt, mode, model or "user_default", reused)
+) -> dict[str, object]:
+    plan = plan_agent_run(root, prompt, mode, receipts=receipts)
+    return {
+        "model": plan["model_label"],
+        "model_reason": plan["model_reason"],
+        "context_decision": plan["context_decision"],
+        "context_reason": plan["context_reason"],
+        "cost_estimate": plan["cost_estimate"],
+    }
 
 
 def rewrite_task_example(contract: object) -> str:
@@ -240,10 +238,11 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
                 saved_thread = load_codex_thread(root)
                 saved_task_path = root / STATE_DIR / TASK_FILE
                 saved_task = json.loads(saved_task_path.read_text()) if saved_task_path.is_file() else None
-                cost_estimate = dashboard_cost_estimate(
+                run_plan = dashboard_run_plan(
                     root, receipts, str(saved_task.get("prompt") or ""),
                     str(saved_task.get("mode") or "small")
                 ) if isinstance(saved_task, dict) else None
+                cost_estimate = run_plan.get("cost_estimate") if run_plan else None
                 self.send_bytes(200, "application/json", json_bytes({
                     "contract": contract, "receipts": receipts, "active_run": run_manager.snapshot(),
                     "model_performance": model_performance(receipts),
@@ -252,6 +251,7 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
                     "codex_context_rotation_reason": codex_thread_rotation_reason(root, saved_thread) if saved_thread else None,
                     "task_saved": (root / STATE_DIR / TASK_FILE).is_file(),
                     "task_cost_estimate": cost_estimate,
+                    "task_run_plan": run_plan,
                     "restart_required": backend_source_fingerprint() != startup_fingerprint,
                 }))
                 return
@@ -401,13 +401,15 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
             }, indent=2) + "\n")
             command = dashboard_agent_command(root, mode)
             receipts = load_receipts(root)
-            cost_estimate = dashboard_cost_estimate(root, receipts, body["prompt"], mode)
+            run_plan = dashboard_run_plan(root, receipts, body["prompt"], mode)
+            cost_estimate = run_plan["cost_estimate"]
             self.send_bytes(200, "application/json", json_bytes({
                 "decision": "PASS", "command": command, "mode": mode,
                 "budget_minutes": budget, "verification_command": verification_command.strip() or None,
                 "verification_mode": "explicit" if verification_command.strip() else None,
                 "human_review_required": human_review,
                 "cost_estimate": cost_estimate,
+                "run_plan": run_plan,
             }))
 
         def save_quick_task(self) -> None:
@@ -449,13 +451,15 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
             }, indent=2) + "\n")
             command = dashboard_agent_command(root, mode)
             receipts = load_receipts(root)
-            cost_estimate = dashboard_cost_estimate(root, receipts, prompt, mode)
+            run_plan = dashboard_run_plan(root, receipts, prompt, mode)
+            cost_estimate = run_plan["cost_estimate"]
             self.send_bytes(200, "application/json", json_bytes({
                 "decision": "PASS", "command": command, "mode": mode,
                 "budget_minutes": budget, "verification_command": verification,
                 "verification_mode": "adaptive",
                 "success": contract.success, "human_review_required": human_review,
                 "cost_estimate": cost_estimate,
+                "run_plan": run_plan,
             }))
 
         def log_message(self, format: str, *args: object) -> None:

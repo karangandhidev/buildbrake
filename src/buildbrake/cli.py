@@ -285,6 +285,82 @@ def estimate_task_cost(
     }
 
 
+def plan_agent_run(
+    root: Path, prompt: str, mode: str, requested_model: str = "auto",
+    force_fresh: bool = False, receipts: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
+    """Choose model, context, and cost forecast once for both dashboard and runner."""
+    history = receipts if receipts is not None else load_receipts(root)
+    performance = model_performance(history)
+    model = select_agent_model(mode, requested_model, performance)
+    if requested_model == "auto":
+        _, model_reason = automatic_model_decision(mode, performance)
+    elif requested_model == "user-default":
+        model_reason = "user requested the configured default model"
+    else:
+        model_reason = f"user explicitly requested {requested_model}"
+
+    saved_thread = None if force_fresh else load_codex_thread(root)
+    saved_model = load_codex_thread_model(root) if saved_thread else None
+    rotation_reason = None
+    if saved_thread and saved_model != model:
+        rotation_reason = (
+            f"cost-aware model changed from {saved_model or 'user default'} "
+            f"to {model or 'user default'}"
+        )
+    elif saved_thread:
+        rotation_reason = codex_thread_rotation_reason(root, saved_thread, mode, prompt)
+
+    normalized_model = model or "user_default"
+    reuse_estimate = estimate_task_cost(history, prompt, mode, normalized_model, True)
+    fresh_estimate = estimate_task_cost(history, prompt, mode, normalized_model, False)
+    if not rotation_reason and saved_thread and reuse_estimate and fresh_estimate:
+        enough_evidence = (
+            int(reuse_estimate["sample_count"]) >= 3
+            and int(fresh_estimate["sample_count"]) >= 3
+            and reuse_estimate["confidence"] != "low"
+            and fresh_estimate["confidence"] != "low"
+        )
+        reuse_midpoint = int(reuse_estimate["median_new_tokens"])
+        fresh_midpoint = int(fresh_estimate["median_new_tokens"])
+        if enough_evidence and reuse_midpoint > fresh_midpoint * REUSE_COST_MULTIPLIER:
+            rotation_reason = (
+                f"predicted reuse cost {reuse_midpoint:,} new tokens; "
+                f"predicted fresh cost is {fresh_midpoint:,}"
+            )
+
+    thread_id = None if force_fresh or rotation_reason else saved_thread
+    context_decision = (
+        "started_fresh_manually" if force_fresh
+        else "started_fresh_automatically" if rotation_reason
+        else "reused_existing_thread" if thread_id
+        else "started_fresh_initially"
+    )
+    estimate = fresh_estimate if thread_id is None else reuse_estimate
+    if estimate is None:
+        estimate = estimate_task_cost(history, prompt, mode, normalized_model, thread_id is not None)
+    context_reason = (
+        "Force fresh context was selected."
+        if force_fresh else rotation_reason
+        or (
+            "Saved context is available and no evidence shows a fresh run would be cheaper."
+            if thread_id else "No reusable project context is available."
+        )
+    )
+    return {
+        "model": model,
+        "model_label": model or "user_default",
+        "model_reason": model_reason,
+        "thread_id": thread_id,
+        "context_decision": context_decision,
+        "context_reason": context_reason,
+        "rotation_reason": rotation_reason,
+        "cost_estimate": estimate,
+        "reuse_estimate": reuse_estimate,
+        "fresh_estimate": fresh_estimate,
+    }
+
+
 def model_performance(receipts: list[dict[str, object]]) -> list[dict[str, object]]:
     """Summarize comparable small-task results without letting outliers dominate."""
     groups: dict[str, list[dict[str, object]]] = {}
@@ -1058,43 +1134,22 @@ def run_agent(args: argparse.Namespace) -> int:
         if task_mode == "small" else ""
     )
     manifest_context = "Known project files:\n" + "\n".join(f"- {path}" for path in manifest) + "\n" if manifest else ""
-    saved_thread_id = None if getattr(args, "fresh", False) else load_codex_thread(root)
     requested_model = getattr(args, "model", "auto")
     historical_receipts = load_receipts(root)
-    performance = model_performance(historical_receipts)
-    agent_model = select_agent_model(task_mode, requested_model, performance)
-    if requested_model == "auto":
-        _, model_decision = automatic_model_decision(task_mode, performance)
-    elif requested_model == "user-default":
-        model_decision = "user requested the configured default model"
-    else:
-        model_decision = f"user explicitly requested {requested_model}"
-    saved_thread_model = load_codex_thread_model(root) if saved_thread_id else None
-    model_rotation_reason = None
-    if saved_thread_id and saved_thread_model != agent_model:
-        model_rotation_reason = (
-            f"cost-aware model changed from {saved_thread_model or 'user default'} "
-            f"to {agent_model or 'user default'}"
-        )
-    rotation_reason = model_rotation_reason or (
-        codex_thread_rotation_reason(root, saved_thread_id, task_mode, prompt)
-        if saved_thread_id else None
+    run_plan = plan_agent_run(
+        root, prompt, task_mode, requested_model,
+        force_fresh=getattr(args, "fresh", False), receipts=historical_receipts,
     )
-    thread_id = None if rotation_reason else saved_thread_id
-    cost_estimate = estimate_task_cost(
-        historical_receipts, prompt, task_mode,
-        agent_model or "user_default", thread_id is not None,
-    )
-    context_decision = (
-        "started_fresh_automatically" if rotation_reason
-        else "started_fresh_manually" if getattr(args, "fresh", False)
-        else "reused_existing_thread" if thread_id
-        else "started_fresh_manually"
-    )
-    rotation_costs = (
-        [int(value.replace(",", "")) for value in re.findall(r"[\d,]+", rotation_reason or "")]
-        if rotation_reason and rotation_reason.startswith("last reuse cost") else []
-    )
+    planned_model = run_plan["model"]
+    agent_model = planned_model if isinstance(planned_model, str) else None
+    model_decision = str(run_plan["model_reason"])
+    rotation_reason = run_plan["rotation_reason"]
+    planned_thread = run_plan["thread_id"]
+    thread_id = planned_thread if isinstance(planned_thread, str) else None
+    context_decision = str(run_plan["context_decision"])
+    cost_estimate = run_plan["cost_estimate"]
+    reuse_estimate = run_plan["reuse_estimate"] or {}
+    fresh_estimate = run_plan["fresh_estimate"] or {}
     handoff_context, handoff_files = compact_project_handoff(root, prompt, task_mode) if thread_id is None else ("", [])
     if handoff_files:
         manifest_context = ""
@@ -1149,19 +1204,19 @@ def run_agent(args: argparse.Namespace) -> int:
             "thread_reused": thread_id is not None,
             "context_decision": context_decision,
             "context_rotation_reason": rotation_reason,
-            "previous_reuse_cost": rotation_costs[0] if len(rotation_costs) > 0 else None,
-            "predicted_fresh_cost": rotation_costs[1] if len(rotation_costs) > 1 else None,
+            "previous_reuse_cost": reuse_estimate.get("median_new_tokens"),
+            "predicted_fresh_cost": fresh_estimate.get("median_new_tokens"),
             "handoff_files": handoff_files,
             "agent_reasoning_effort": reasoning_effort or "user_default",
             "agent_model": agent_model or "user_default",
             "agent_model_decision": model_decision,
             "human_review_required": human_review_required,
-            "estimated_new_tokens": cost_estimate.get("median_new_tokens") if cost_estimate else None,
-            "estimated_new_tokens_low": cost_estimate.get("low_new_tokens") if cost_estimate else None,
-            "estimated_new_tokens_high": cost_estimate.get("high_new_tokens") if cost_estimate else None,
-            "cost_estimate_confidence": cost_estimate.get("confidence") if cost_estimate else None,
-            "cost_estimate_samples": cost_estimate.get("sample_count") if cost_estimate else 0,
-            "cost_estimate_basis": cost_estimate.get("basis") if cost_estimate else None,
+            "estimated_new_tokens": cost_estimate.get("median_new_tokens") if isinstance(cost_estimate, dict) else None,
+            "estimated_new_tokens_low": cost_estimate.get("low_new_tokens") if isinstance(cost_estimate, dict) else None,
+            "estimated_new_tokens_high": cost_estimate.get("high_new_tokens") if isinstance(cost_estimate, dict) else None,
+            "cost_estimate_confidence": cost_estimate.get("confidence") if isinstance(cost_estimate, dict) else None,
+            "cost_estimate_samples": cost_estimate.get("sample_count") if isinstance(cost_estimate, dict) else 0,
+            "cost_estimate_basis": cost_estimate.get("basis") if isinstance(cost_estimate, dict) else None,
         },
         scope_limits=limits,
     )

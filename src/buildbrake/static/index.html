@@ -419,6 +419,7 @@ let projectRoot = '';
 let pendingEvaluation = null;
 let savedTaskAvailable = false;
 let taskCostEstimate = null;
+let taskRunPlan = null;
 function projectRelative(value) {
   const text = String(value ?? '');
   if (!projectRoot) return text;
@@ -554,7 +555,8 @@ function savedTaskResult(data) {
       : `<div class="muted">Automatic verification: ${esc(data.verification_command)}</div>`
     : '<div class="muted">Outcome will require human evaluation.</div>';
   const estimate = data.cost_estimate ? `<div class="muted">Expected usage: ${data.cost_estimate.low_new_tokens.toLocaleString()}–${data.cost_estimate.high_new_tokens.toLocaleString()} new tokens · ${esc(data.cost_estimate.confidence)} confidence · based on ${data.cost_estimate.sample_count} ${esc(data.cost_estimate.basis)}</div>` : '<div class="muted">Expected usage: not enough previous runs to estimate</div>';
-  return `<span class="good">Task passed and was saved.</span>${data.mode ? `<div>${esc(data.mode)} mode · ${data.budget_minutes} minute configured target</div>` : ''}${estimate}${verification}<button class="run-task-button" type="button" onclick="runAgent()">Run task</button><details class="terminal-alternative"><summary>Terminal alternative</summary><div class="command-box" role="button" tabindex="0" aria-label="Copy command" onclick="copyCommand(this)" onkeydown="if(event.key === 'Enter' || event.key === ' '){ event.preventDefault(); copyCommand(this); }"><code>${esc(projectRelative(data.command))}</code><button type="button" aria-label="Copy command"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><g class="copy-glyph"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></g><path class="copy-check" d="m5 12 4 4L19 6"></path></svg></button></div></details>`;
+  const plan = data.run_plan ? `<div><strong>Recommended run:</strong> ${esc(data.run_plan.model === 'user_default' ? 'default model' : data.run_plan.model)} · ${esc((data.run_plan.context_decision || '').replaceAll('_', ' '))}<br><span class="muted">${esc(data.run_plan.model_reason)} · ${esc(data.run_plan.context_reason)}</span></div>` : '';
+  return `<span class="good">Task passed and was saved.</span>${data.mode ? `<div>${esc(data.mode)} mode · ${data.budget_minutes} minute configured target</div>` : ''}${plan}${estimate}${verification}<button class="run-task-button" type="button" onclick="runAgent()">Run task</button><details class="terminal-alternative"><summary>Terminal alternative</summary><div class="command-box" role="button" tabindex="0" aria-label="Copy command" onclick="copyCommand(this)" onkeydown="if(event.key === 'Enter' || event.key === ' '){ event.preventDefault(); copyCommand(this); }"><code>${esc(projectRelative(data.command))}</code><button type="button" aria-label="Copy command"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><g class="copy-glyph"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></g><path class="copy-check" d="m5 12 4 4L19 6"></path></svg></button></div></details>`;
 }
 async function runAgent() {
   const fresh = document.querySelector('#fresh-context')?.checked === true;
@@ -586,9 +588,9 @@ function renderAgentRun(run) {
       ? `<div><span class="context-option"><label class="context-choice"><input id="fresh-context" type="checkbox" ${freshContext ? 'checked' : ''}>Force fresh context</label><span class="context-info" tabindex="0" role="img" aria-label="Manual override. BuildBrake normally chooses the cheaper context automatically. This starts a new Codex conversation without changing project files.">i</span></span><button type="button" onclick="runAgent()">Run saved task</button></div>`
       : '<span class="muted">Save a task to start an agent run</span>';
   const output = run.lines?.length ? `<div class="live-output">${run.lines.map(esc).join('<br>')}</div>` : '';
-  const contextStatus = contextRotationReason
+  const contextStatus = taskRunPlan?.context_reason || (contextRotationReason
     ? `saved context reached its efficiency limit; next run starts fresh (${contextRotationReason})`
-    : savedCodexContext ? 'saved project context ready' : 'next run starts fresh';
+    : savedCodexContext ? 'saved project context ready' : 'next run starts fresh');
   const costPreview = savedTaskAvailable && taskCostEstimate ? `<br><span class="muted">Expected: ${taskCostEstimate.low_new_tokens.toLocaleString()}–${taskCostEstimate.high_new_tokens.toLocaleString()} new tokens · ${esc(taskCostEstimate.confidence)} confidence · ${taskCostEstimate.sample_count} ${esc(taskCostEstimate.basis)}</span>` : '';
   control.innerHTML = `<div class="live-head"><div><h2>Agent run</h2><span class="${statusClass}">${esc(run.status)}</span> · ${duration(run.elapsed_seconds)}<br><span class="muted">${contextStatus}</span>${costPreview}</div>${controls}</div>${output}`;
   const nextOutput = document.querySelector('#agent-control .live-output');
@@ -654,13 +656,14 @@ async function loadState(populateForm = false) {
   try {
   const response = await fetch('/api/state', {cache: 'no-store'});
   if (!response.ok) throw new Error(`server returned ${response.status}`);
-  const {contract: c, receipts, active_run, project_root, codex_context_saved, codex_context_rotation_reason, task_saved, task_cost_estimate, restart_required, model_performance = []} = await response.json();
+  const {contract: c, receipts, active_run, project_root, codex_context_saved, codex_context_rotation_reason, task_saved, task_cost_estimate, task_run_plan, restart_required, model_performance = []} = await response.json();
   projectRoot = project_root || '';
   document.querySelector('#project-location').textContent = projectRoot || 'Unknown project';
   savedCodexContext = codex_context_saved === true;
   contextRotationReason = codex_context_rotation_reason || null;
   savedTaskAvailable = task_saved === true;
   taskCostEstimate = task_cost_estimate || null;
+  taskRunPlan = task_run_plan || null;
   showRestartNotice(restart_required === true);
   const run = active_run || {status:'idle',elapsed_seconds:0,lines:[]};
   renderAgentRun(run);
@@ -743,6 +746,7 @@ async function loadState(populateForm = false) {
       ? 'started_fresh_automatically' : r.thread_reused ? 'reused_existing_thread' : 'started_fresh_manually');
     const contextLabels = {
       reused_existing_thread: 'Reused existing Codex thread',
+      started_fresh_initially: 'Started first project thread',
       started_fresh_manually: 'Started fresh manually',
       started_fresh_automatically: 'Started fresh automatically'
     };
