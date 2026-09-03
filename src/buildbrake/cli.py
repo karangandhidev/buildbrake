@@ -513,7 +513,10 @@ def run_guarded(args: argparse.Namespace) -> int:
     next_checkpoint = started + contract.checkpoint_minutes * 60
     stopped_reason = "completed"
     scope_violation = threading.Event()
-    scope_state: dict[str, object] = {"commands": 0, "files": set(), "reason": None}
+    scope_state: dict[str, object] = {
+        "commands": 0, "files": set(), "reason": None, "command_signatures": [],
+        "broad_scans": 0, "inspection_streak": 0, "max_command_repeats": 0,
+    }
     scope_limits = getattr(args, "scope_limits", None)
 
     print(f"Guarding: {' '.join(command)}")
@@ -609,6 +612,12 @@ def run_guarded(args: argparse.Namespace) -> int:
             "commands_observed": scope_state["commands"],
             "files_observed": sorted(scope_state["files"]),
             "limits": scope_limits,
+            "reason": scope_state["reason"],
+            "signals": {
+                "broad_scans": scope_state["broad_scans"],
+                "inspection_streak": scope_state["inspection_streak"],
+                "max_command_repeats": scope_state["max_command_repeats"],
+            },
         } if scope_limits else None,
         "log": str(log_path),
     }
@@ -703,12 +712,39 @@ def update_scope_state(
     item = event.get("item", {})
     if event.get("type") == "item.started" and item.get("type") == "command_execution":
         state["commands"] = int(state["commands"]) + 1
+        command = str(item.get("command") or "")
+        signature = re.sub(r"\s+", " ", command.strip().lower())
+        signatures = state.setdefault("command_signatures", [])
+        assert isinstance(signatures, list)
+        signatures.append(signature)
+        repeats = signatures.count(signature) if signature else 0
+        state["max_command_repeats"] = max(int(state.get("max_command_repeats") or 0), repeats)
+        broad_scan = bool(re.search(
+            r"(?:\brg\s+--files\b|\bgrep\b[^\n]*(?:\s-[a-z]*r\b|--recursive)|"
+            r"\bls\s+-[a-z]*r[a-z]*\b|\btree(?:\s|$)|\bfind\s+(?:\.|[^ ]*/)(?:\s|$))",
+            signature,
+        ))
+        if broad_scan:
+            state["broad_scans"] = int(state.get("broad_scans") or 0) + 1
+        inspection = bool(re.search(
+            r"(?:\bsed\s+-n\b|\bhead\b|\btail\b|\bcat\b|\bnl\s+-ba\b|\brg\b|"
+            r"\bgrep\b|\bfind\b|\bls\b|\btree\b|\bgit\s+(?:diff|status)\b)",
+            signature,
+        ))
+        state["inspection_streak"] = int(state.get("inspection_streak") or 0) + 1 if inspection else 0
     if item.get("type") == "file_change":
         files = state["files"]
         assert isinstance(files, set)
         files.update(str(change.get("path")) for change in item.get("changes", []) if change.get("path"))
+        state["inspection_streak"] = 0
     if int(state["commands"]) > limits["max_commands"]:
         state["reason"] = f"more than {limits['max_commands']} shell commands"
+    elif int(state.get("max_command_repeats") or 0) >= 3:
+        state["reason"] = "the same shell command was repeated 3 times"
+    elif int(state.get("broad_scans") or 0) >= 2:
+        state["reason"] = "a second broad project scan was attempted in small mode"
+    elif int(state.get("inspection_streak") or 0) >= 5:
+        state["reason"] = "5 inspection commands ran without a file change"
     else:
         files = state["files"]
         assert isinstance(files, set)

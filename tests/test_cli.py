@@ -882,6 +882,50 @@ class BuildBrakeTests(unittest.TestCase):
         event = '{"type":"item.completed","item":{"type":"file_change","changes":[{"path":"a"},{"path":"b"}]}}'
         self.assertIn("more than 1", update_scope_state(event, state, limits))
 
+    def test_small_task_scope_stops_repeated_command_loop(self):
+        from buildbrake.cli import update_scope_state
+
+        state = {"commands": 0, "files": set(), "reason": None}
+        limits = {"max_commands": 6, "max_files": 3}
+        event = json.dumps({"type": "item.started", "item": {
+            "type": "command_execution", "command": "rg -n button src/app.html",
+        }})
+        self.assertIsNone(update_scope_state(event, state, limits))
+        self.assertIsNone(update_scope_state(event, state, limits))
+        self.assertIn("repeated 3 times", update_scope_state(event, state, limits))
+
+    def test_small_task_scope_allows_one_broad_scan_but_stops_second(self):
+        from buildbrake.cli import update_scope_state
+
+        state = {"commands": 0, "files": set(), "reason": None}
+        limits = {"max_commands": 6, "max_files": 3}
+        first = json.dumps({"type": "item.started", "item": {
+            "type": "command_execution", "command": "rg --files",
+        }})
+        second = json.dumps({"type": "item.started", "item": {
+            "type": "command_execution", "command": "find . -type f",
+        }})
+        self.assertIsNone(update_scope_state(first, state, limits))
+        self.assertIn("second broad project scan", update_scope_state(second, state, limits))
+
+    def test_small_task_scope_stops_inspection_loop_and_resets_after_edit(self):
+        from buildbrake.cli import update_scope_state
+
+        state = {"commands": 0, "files": set(), "reason": None}
+        limits = {"max_commands": 10, "max_files": 3}
+        inspect = lambda command: json.dumps({"type": "item.started", "item": {
+            "type": "command_execution", "command": command,
+        }})
+        for command in ("sed -n 1,20p a", "rg x a", "git diff", "head a"):
+            self.assertIsNone(update_scope_state(inspect(command), state, limits))
+        edit = json.dumps({"type": "item.completed", "item": {
+            "type": "file_change", "changes": [{"path": "a"}],
+        }})
+        self.assertIsNone(update_scope_state(edit, state, limits))
+        for command in ("sed -n 1,20p a", "rg y a", "git diff", "head a"):
+            self.assertIsNone(update_scope_state(inspect(command), state, limits))
+        self.assertIn("without a file change", update_scope_state(inspect("tail a"), state, limits))
+
     def test_task_size_is_classified_automatically(self):
         from buildbrake.cli import classify_task, requires_human_review
 
