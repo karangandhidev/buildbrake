@@ -1056,6 +1056,51 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertIn("src/buildbrake/static/index.html", manifest)
         self.assertNotIn(".buildbrake/outcome.json", manifest)
 
+        runner_source = (ROOT / "src/buildbrake/cli.py").read_text()
+        self.assertIn("context_packet = local_context_packet(", runner_source)
+        self.assertNotIn('manifest_context = "Known project files:', runner_source)
+
+    def test_local_context_packet_ranks_and_bounds_relevant_source(self):
+        from buildbrake.cli import local_context_packet
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "src").mkdir()
+            (root / "src/widget.py").write_text(
+                "def render_button():\n"
+                "    # Button spacing belongs here\n"
+                "    return 'button gap'\n"
+            )
+            (root / "src/database.py").write_text("def migrate_database(): return True\n")
+            packet = local_context_packet(
+                root, "Adjust the widget button spacing", "small", max_chars=500,
+            )
+            self.assertEqual(packet["files"][0], "src/widget.py")
+            self.assertIn("L2:     # Button spacing belongs here", packet["text"])
+            self.assertNotIn("migrate_database", packet["text"])
+            self.assertLessEqual(packet["characters"], 500)
+            self.assertEqual(packet["manifest_files"], 2)
+
+    def test_local_context_packet_is_disabled_for_standard_tasks(self):
+        from buildbrake.cli import local_context_packet
+
+        packet = local_context_packet(ROOT, "Redesign the entire project", "standard")
+        self.assertEqual(packet["files"], [])
+        self.assertEqual(packet["characters"], 0)
+
+    def test_reused_context_packet_sends_locations_without_repeating_source(self):
+        from buildbrake.cli import local_context_packet
+
+        packet = local_context_packet(
+            ROOT, "Change the task size warning font size and weight", "small",
+            max_chars=900, include_excerpts=False,
+        )
+        self.assertIn("src/buildbrake/static/index.html", packet["files"])
+        self.assertIn("Matching areas: L", packet["text"])
+        self.assertIn(".task-size-warning", (ROOT / "src/buildbrake/static/index.html").read_text())
+        self.assertNotIn(".task-size-warning {", packet["text"])
+        self.assertLessEqual(packet["characters"], 900)
+
     def test_agent_admission_of_failure_is_not_left_for_human_evaluation(self):
         from buildbrake.cli import agent_reported_failure
 
