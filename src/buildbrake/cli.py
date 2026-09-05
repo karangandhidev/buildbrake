@@ -281,6 +281,85 @@ def forecast_performance(
     }
 
 
+def receipt_new_tokens(receipt: dict[str, object]) -> int | None:
+    """Return uncached input tokens, or None when Codex did not report usage."""
+    events = receipt.get("agent_events") or {}
+    usage = events.get("usage") if isinstance(events, dict) else None
+    if not isinstance(usage, dict) or usage.get("input_tokens") is None:
+        return None
+    return max(0, int(usage.get("input_tokens") or 0) - int(usage.get("cached_input_tokens") or 0))
+
+
+def estimate_token_savings(
+    receipt: dict[str, object], earlier_receipts: list[dict[str, object]], minimum_samples: int = 3,
+) -> dict[str, object]:
+    """Estimate savings against comparable earlier runs without claiming causation."""
+    actual = receipt_new_tokens(receipt)
+    if receipt.get("run_type") != "ai_agent" or actual is None:
+        return {"status": "unavailable", "reason": "Codex token usage was not reported."}
+    mode = str(receipt.get("task_mode") or "standard")
+    model = str(receipt.get("agent_model") or "user_default")
+    prompt = str(receipt.get("agent_prompt") or "")
+    same_model: list[int] = []
+    similar: list[int] = []
+    for previous in earlier_receipts:
+        if previous.get("run_type") != "ai_agent" or previous.get("task_mode") != mode:
+            continue
+        if str(previous.get("agent_model") or "user_default") != model:
+            continue
+        cost = receipt_new_tokens(previous)
+        if cost is None:
+            continue
+        same_model.append(cost)
+        if task_similarity(prompt, str(previous.get("agent_prompt") or "")) >= 0.15:
+            similar.append(cost)
+    samples = similar if len(similar) >= minimum_samples else same_model
+    basis = "similar earlier tasks" if samples is similar else f"earlier {mode} tasks using the same model"
+    if len(samples) < minimum_samples:
+        return {
+            "status": "collecting", "actual_new_tokens": actual,
+            "sample_count": len(samples), "minimum_samples": minimum_samples,
+            "reason": f"Need {minimum_samples} comparable earlier runs; {len(samples)} available.",
+        }
+    ordered = sorted(samples)
+    middle = len(ordered) // 2
+    baseline = ordered[middle] if len(ordered) % 2 else round((ordered[middle - 1] + ordered[middle]) / 2)
+    difference = baseline - actual
+    percent = round(abs(difference) / baseline * 100, 1) if baseline else 0.0
+    status = "saved" if difference > 0 else "spent_more" if difference < 0 else "matched"
+    return {
+        "status": status, "actual_new_tokens": actual, "baseline_new_tokens": baseline,
+        "estimated_tokens_saved": difference, "percent_difference": percent,
+        "sample_count": len(samples), "basis": basis,
+        "method": "historical_comparable_median_v1",
+        "disclaimer": "Estimate from earlier comparable runs; it does not prove BuildBrake caused the difference.",
+    }
+
+
+def annotate_token_savings(receipts: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Attach point-in-time savings estimates while preventing future-run leakage."""
+    ordered = sorted(receipts, key=lambda item: str(item.get("started_at") or item.get("id") or ""))
+    earlier: list[dict[str, object]] = []
+    for receipt in ordered:
+        receipt["token_savings"] = estimate_token_savings(receipt, earlier)
+        earlier.append(receipt)
+    return receipts
+
+
+def token_savings_summary(receipts: list[dict[str, object]]) -> dict[str, object]:
+    measured = [
+        receipt.get("token_savings") for receipt in receipts
+        if isinstance(receipt.get("token_savings"), dict)
+        and receipt["token_savings"].get("status") in {"saved", "spent_more", "matched"}
+    ]
+    net = sum(int(item.get("estimated_tokens_saved") or 0) for item in measured)
+    return {
+        "measured_runs": len(measured), "estimated_net_tokens_saved": net,
+        "runs_saving_tokens": sum(item.get("status") == "saved" for item in measured),
+        "method": "historical_comparable_median_v1",
+    }
+
+
 def estimate_task_cost(
     receipts: list[dict[str, object]], prompt: str, mode: str,
     model: str | None = None, thread_reused: bool | None = None,
@@ -1659,6 +1738,25 @@ def list_receipts(args: argparse.Namespace) -> int:
     return 0
 
 
+def show_benchmark(args: argparse.Namespace) -> int:
+    root = Path(args.directory).resolve()
+    receipts = load_receipts(root)
+    annotate_token_savings(receipts)
+    summary = token_savings_summary(receipts)
+    print("BUILDBRAKE TOKEN BENCHMARK")
+    print(f"Agent runs: {sum(item.get('run_type') == 'ai_agent' for item in receipts)}")
+    print(f"Runs with a comparable baseline: {summary['measured_runs']}")
+    if not summary["measured_runs"]:
+        print("Result: collecting data (each comparison needs 3 earlier runs of the same size and model)")
+        return 0
+    net = int(summary["estimated_net_tokens_saved"])
+    direction = "saved" if net >= 0 else "spent above baseline"
+    print(f"Estimated net: {abs(net):,} new tokens {direction}")
+    print(f"Runs below baseline: {summary['runs_saving_tokens']} / {summary['measured_runs']}")
+    print("Method: median of earlier comparable runs; this does not prove BuildBrake caused the difference.")
+    return 0
+
+
 def find_receipt(root: Path, receipt_id: str | None) -> Path:
     items = receipt_files(root)
     if not items:
@@ -1770,6 +1868,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     history = sub.add_parser("history", help="list recorded runs")
     history.set_defaults(func=list_receipts)
+
+    benchmark = sub.add_parser("benchmark", help="compare token usage with earlier comparable runs")
+    benchmark.set_defaults(func=show_benchmark)
 
     evaluate = sub.add_parser("evaluate", help="record whether a run proved its target")
     evaluate.add_argument("receipt", nargs="?", default="latest", help="receipt ID or 'latest'")

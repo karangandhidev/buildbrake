@@ -16,6 +16,63 @@ CLI = [sys.executable, "-m", "buildbrake.cli"]
 
 
 class BuildBrakeTests(unittest.TestCase):
+    def test_token_savings_uses_earlier_comparable_median(self):
+        from buildbrake.cli import estimate_token_savings
+
+        def receipt(tokens, prompt="adjust dashboard button spacing", model="gpt-5.6-luna"):
+            return {
+                "run_type": "ai_agent", "task_mode": "small", "agent_model": model,
+                "agent_prompt": prompt,
+                "agent_events": {"usage": {"input_tokens": tokens + 100, "cached_input_tokens": 100}},
+            }
+
+        current = receipt(10_000)
+        measured = estimate_token_savings(current, [receipt(20_000), receipt(22_000), receipt(24_000)])
+        self.assertEqual(measured["status"], "saved")
+        self.assertEqual(measured["baseline_new_tokens"], 22_000)
+        self.assertEqual(measured["estimated_tokens_saved"], 12_000)
+        self.assertEqual(measured["sample_count"], 3)
+
+    def test_token_savings_requires_three_comparable_earlier_runs(self):
+        from buildbrake.cli import estimate_token_savings
+
+        current = {
+            "run_type": "ai_agent", "task_mode": "small", "agent_model": "gpt-5.6-luna",
+            "agent_prompt": "change dashboard colors",
+            "agent_events": {"usage": {"input_tokens": 10_000, "cached_input_tokens": 0}},
+        }
+        measured = estimate_token_savings(current, [current.copy(), current.copy()])
+        self.assertEqual(measured["status"], "collecting")
+        self.assertEqual(measured["sample_count"], 2)
+
+    def test_token_savings_annotation_does_not_use_future_runs(self):
+        from buildbrake.cli import annotate_token_savings
+
+        receipts = [
+            {"id": str(index), "started_at": f"2026-01-0{index}T00:00:00Z", "run_type": "ai_agent",
+             "task_mode": "small", "agent_model": "same", "agent_prompt": "change dashboard spacing",
+             "agent_events": {"usage": {"input_tokens": tokens, "cached_input_tokens": 0}}}
+            for index, tokens in enumerate((30_000, 25_000, 20_000, 10_000), 1)
+        ]
+        annotate_token_savings(list(reversed(receipts)))
+        self.assertEqual(receipts[0]["token_savings"]["status"], "collecting")
+        self.assertEqual(receipts[-1]["token_savings"]["status"], "saved")
+        self.assertEqual(receipts[-1]["token_savings"]["baseline_new_tokens"], 25_000)
+
+    def test_dashboard_displays_honest_token_savings_measurement(self):
+        html = (ROOT / "src/buildbrake/static/index.html").read_text()
+        self.assertIn("estimated net tokens saved", html)
+        self.assertIn("Estimated token savings", html)
+        self.assertIn("This comparison does not prove causation.", html)
+        self.assertIn("Needs 3 earlier comparable runs before measuring", html)
+
+    def test_benchmark_command_reports_when_baseline_is_still_collecting(self):
+        with tempfile.TemporaryDirectory() as folder:
+            result = self.run_cli(folder, "benchmark")
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("BUILDBRAKE TOKEN BENCHMARK", result.stdout)
+        self.assertIn("collecting data", result.stdout)
+
     def test_task_cost_estimate_prefers_similar_runs_and_uses_median(self):
         from buildbrake.cli import estimate_task_cost
 

@@ -129,6 +129,8 @@ If an agent explicitly reports that it could not reach the target or changed no 
 
 AI receipts show new input tokens, commands, files changed, and runtime separately against the configured targets for the selected task mode. Each resource is marked within target or shows its percentage over target. Once both kinds of runs exist, the dashboard also compares average new-token usage for fresh and reused context. This is an observed comparison, not a promise that reuse caused the difference. Outcome proof remains an independent status.
 
+BuildBrake also estimates whether each run used fewer tokens than its historical baseline. It compares a run with the median of earlier runs using the same task size and model, preferring similar task wording, and waits for at least three comparable earlier runs. The dashboard and `buildbrake benchmark` show net estimated savings—or extra spend—and always label the result as a comparison rather than proof that BuildBrake caused it.
+
 ```bash
 ./bb agent
 ```

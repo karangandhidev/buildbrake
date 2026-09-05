@@ -656,7 +656,7 @@ async function loadState(populateForm = false) {
   try {
   const response = await fetch('/api/state', {cache: 'no-store'});
   if (!response.ok) throw new Error(`server returned ${response.status}`);
-  const {contract: c, receipts, active_run, project_root, codex_context_saved, codex_context_rotation_reason, task_saved, task_cost_estimate, task_run_plan, restart_required, model_performance = [], forecast_performance = {}} = await response.json();
+  const {contract: c, receipts, active_run, project_root, codex_context_saved, codex_context_rotation_reason, task_saved, task_cost_estimate, task_run_plan, restart_required, model_performance = [], forecast_performance = {}, token_savings_summary = {}} = await response.json();
   projectRoot = project_root || '';
   document.querySelector('#project-location').textContent = projectRoot || 'Unknown project';
   savedCodexContext = codex_context_saved === true;
@@ -706,13 +706,23 @@ async function loadState(populateForm = false) {
   const forecastDetail = forecast_performance.sample_count
     ? `${forecast_performance.sample_count} measured forecasts · ${forecast_performance.median_error_percent}% typical error · ${esc(forecast_performance.status.replaceAll('_', ' '))}`
     : 'Accuracy appears after predicted runs complete';
+  const measuredSavings = token_savings_summary.measured_runs || 0;
+  const netSavings = token_savings_summary.estimated_net_tokens_saved || 0;
+  const savingsHeadline = measuredSavings ? `${Math.abs(netSavings).toLocaleString()}` : '—';
+  const savingsLabel = measuredSavings
+    ? (netSavings >= 0 ? 'estimated net tokens saved' : 'estimated extra tokens spent')
+    : 'estimated token savings';
+  const savingsDetail = measuredSavings
+    ? `${measuredSavings} measured runs · ${token_savings_summary.runs_saving_tokens || 0} used fewer tokens`
+    : 'Needs 3 earlier comparable runs before measuring';
   document.querySelector('#summary').innerHTML = `
     <div class="metric"><b>${proved}</b><span>outcomes proved</span></div>
     <div class="metric"><b>${receipts.length}</b><span>guarded runs</span></div>
     <div class="metric"><b>${duration(total)}</b><span>total runtime</span></div>
     <div class="metric"><b>${reusedRuns.length}</b><span>context-reused runs</span><small>${contextComparison}</small></div>
     <div class="metric"><b>${lunaPerformance?.runs || 0}</b><span>Luna small-task runs <span class="context-info" tabindex="0" role="img" aria-label="Benchmark uses evaluated small tasks and median new tokens to avoid distortion from unusually expensive runs.">i</span></span><small>${lunaBenchmark}</small></div>
-    <div class="metric"><b>${forecastCoverage}</b><span>forecasts inside range <span class="context-info" tabindex="0" role="img" aria-label="Coverage measures how often actual new-token usage landed inside BuildBrake's predicted range. Target: at least 75%.">i</span></span><small>${forecastDetail}</small></div>`;
+    <div class="metric"><b>${forecastCoverage}</b><span>forecasts inside range <span class="context-info" tabindex="0" role="img" aria-label="Coverage measures how often actual new-token usage landed inside BuildBrake's predicted range. Target: at least 75%.">i</span></span><small>${forecastDetail}</small></div>
+    <div class="metric"><b>${savingsHeadline}</b><span>${savingsLabel} <span class="context-info" tabindex="0" role="img" aria-label="Estimated against the median of earlier runs with the same task size and model, preferring similar tasks. This is evidence of relative usage, not proof that BuildBrake caused the difference.">i</span></span><small>${savingsDetail}</small></div>`;
   const runsElement = document.querySelector('#runs');
   const openFindings = new Set(
     [...runsElement.querySelectorAll('.run details[open]')].map(details => details.closest('.run')?.dataset.receipt)
@@ -792,6 +802,16 @@ async function loadState(populateForm = false) {
     const costDiagnosis = efficiency?.diagnosis
       ? `<div class="cost-diagnosis"><strong>Why usage was high</strong>${esc(efficiency.diagnosis.cause)}<br><span class="muted">Next: ${esc(efficiency.diagnosis.next_step)}</span></div>`
       : '';
+    const savings = r.token_savings || {};
+    const savingsComparison = savings.status === 'saved'
+      ? `<div class="run-interpretation good"><strong>Estimated token savings</strong><br>${savings.estimated_tokens_saved.toLocaleString()} fewer new tokens than the ${savings.baseline_new_tokens.toLocaleString()}-token historical baseline (${savings.percent_difference}% lower).<br><span class="muted">Based on ${savings.sample_count} ${esc(savings.basis)}. This comparison does not prove causation.</span></div>`
+      : savings.status === 'spent_more'
+      ? `<div class="run-interpretation bad"><strong>Estimated extra token spend</strong><br>${Math.abs(savings.estimated_tokens_saved).toLocaleString()} more new tokens than the ${savings.baseline_new_tokens.toLocaleString()}-token historical baseline (${savings.percent_difference}% higher).<br><span class="muted">Based on ${savings.sample_count} ${esc(savings.basis)}. This comparison does not prove causation.</span></div>`
+      : savings.status === 'matched'
+      ? `<div class="run-interpretation muted"><strong>Matched historical token baseline</strong><br>${savings.actual_new_tokens.toLocaleString()} new tokens · based on ${savings.sample_count} ${esc(savings.basis)}.</div>`
+      : savings.status === 'collecting'
+      ? `<div class="run-interpretation muted"><strong>Token savings baseline collecting</strong><br>${esc(savings.reason)}</div>`
+      : '';
     return `<article class="run" data-receipt="${esc(r.id)}">
       <div class="run-head"><div><span class="run-id">${esc(r.id)}</span> <span class="tag ${isAgent ? 'good' : ''}">${type}</span></div>${receiptOutcome}</div>
       <div class="run-task">${esc(command)}</div>
@@ -804,7 +824,7 @@ async function loadState(populateForm = false) {
             <div><strong>Stopped because</strong>${esc((r.stopping_reason || '—').replaceAll('_',' '))}${r.scope?.reason ? `<br><small>${esc(r.scope.reason)}</small>` : ''}</div>
             ${isAgent ? `<div><strong>Context decision</strong>${contextLabels[contextDecision] || '—'}${contextCosts}</div>` : ''}
             <div><strong>Run details</strong>${r.task_mode ? `${esc(r.task_mode)} mode · ${esc(r.agent_model === 'user_default' || !r.agent_model ? 'default model' : r.agent_model)} · ${esc(r.agent_reasoning_effort === 'user_default' ? 'default' : r.agent_reasoning_effort || 'default') } reasoning` : '—'}${r.context_packet_characters ? `<br><small>Local context: ${r.context_packet_files?.length || 0} files · ${r.context_packet_characters.toLocaleString()} characters · replaced ${r.manifest_files_avoided || 0}-file manifest</small>` : ''}${r.agent_model_decision ? `<br><small>${esc(r.agent_model_decision)}</small>` : ''}</div>
-          </div>${interpretation}${verificationRun}${finding}<div class="decision">${label}</div>
+          </div>${interpretation}${verificationRun}${savingsComparison}${finding}<div class="decision">${label}</div>
         </div>
         <aside class="run-resources"><div><strong>Usage</strong><span class="usage-value">${usage}</span>${estimateComparison}</div><div><strong>Resource comparison</strong>${efficiencyLabel}${costDiagnosis}</div></aside>
       </div>
