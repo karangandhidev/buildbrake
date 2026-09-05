@@ -115,6 +115,9 @@ def codex_thread_rotation_reason(
     if not matching:
         return None
     latest = matching[0]
+    waste = analyze_run_waste(latest)
+    if latest.get("thread_reused") is True and waste.get("primary") == "context_overhead":
+        return "previous reused run was dominated by conversation context rather than implementation work"
     events = latest.get("agent_events") or {}
     usage = events.get("usage") if isinstance(events, dict) else {}
     usage = usage if isinstance(usage, dict) else {}
@@ -357,6 +360,116 @@ def token_savings_summary(receipts: list[dict[str, object]]) -> dict[str, object
         "measured_runs": len(measured), "estimated_net_tokens_saved": net,
         "runs_saving_tokens": sum(item.get("status") == "saved" for item in measured),
         "method": "historical_comparable_median_v1",
+    }
+
+
+def analyze_run_waste(receipt: dict[str, object]) -> dict[str, object]:
+    """Explain likely waste from observable run telemetry, without guessing hidden reasoning."""
+    if receipt.get("run_type") != "ai_agent":
+        return {"primary": None, "patterns": [], "status": "not_applicable"}
+    mode = str(receipt.get("task_mode") or "standard")
+    targets = RESOURCE_TARGETS.get(mode, RESOURCE_TARGETS["standard"])
+    new_tokens = receipt_new_tokens(receipt)
+    events = receipt.get("agent_events") or {}
+    commands = int(events.get("commands_started") or 0) if isinstance(events, dict) else 0
+    files = len(set(receipt.get("changed_files") or []))
+    scope = receipt.get("scope") or {}
+    signals = scope.get("signals") if isinstance(scope, dict) else {}
+    signals = signals if isinstance(signals, dict) else {}
+    patterns: list[dict[str, str]] = []
+
+    def add(code: str, label: str, evidence: str, recommendation: str) -> None:
+        patterns.append({
+            "code": code, "label": label, "evidence": evidence,
+            "recommendation": recommendation,
+        })
+
+    above_target = new_tokens is not None and new_tokens > int(targets["new_tokens"])
+    if (
+        above_target and receipt.get("thread_reused") is True
+        and commands <= max(2, int(targets["commands"]) // 2) and files <= 1
+    ):
+        add(
+            "context_overhead", "Reused-context overhead",
+            f"{new_tokens:,} new tokens with only {commands} commands and {files} changed file(s).",
+            "Start the next related task in a fresh thread with the compact local handoff.",
+        )
+    if commands > int(targets["commands"]) or int(signals.get("inspection_streak") or 0) >= 5:
+        add(
+            "inspection_loop", "Excessive inspection",
+            f"{commands} commands were used against a target of {targets['commands']}.",
+            "Use the local edit map first and stop after one targeted search if it identifies the file.",
+        )
+    if int(signals.get("broad_scans") or 0) >= 2:
+        add(
+            "broad_scans", "Repeated broad discovery",
+            f"{signals['broad_scans']} repository-wide scans were observed.",
+            "Reuse ranked file hints instead of scanning the repository again.",
+        )
+    if int(signals.get("max_command_repeats") or 0) >= 3:
+        add(
+            "repeated_command", "Repeated command",
+            f"One command was attempted {signals['max_command_repeats']} times.",
+            "Stop after the second identical result and change approach.",
+        )
+    if above_target and files == 0:
+        add(
+            "no_output", "High cost without a code change",
+            f"{new_tokens:,} new tokens were used and no changed file was reported.",
+            "Require a concrete blocker or a targeted edit before allowing more exploration.",
+        )
+    if files > int(targets["files"]):
+        add(
+            "scope_expansion", "File scope expanded",
+            f"{files} files changed against a target of {targets['files']}.",
+            "Split the task or name the intended files before the next run.",
+        )
+    verification = receipt.get("verification") or {}
+    strategy = verification.get("strategy") if isinstance(verification, dict) else None
+    if mode == "small" and strategy == "configured":
+        command = str(verification.get("command") or "")
+        if "discover" in command or "test" in command.lower() and "unittest" not in command:
+            add(
+                "broad_verification", "Broad verification for a small task",
+                "A configured project-wide test command ran after a small change.",
+                "Use adaptive verification so BuildBrake selects matching tests first.",
+            )
+    if not patterns:
+        return {
+            "primary": None, "patterns": [], "status": "no_obvious_waste",
+            "summary": "No obvious waste pattern was visible in the recorded telemetry.",
+        }
+    return {
+        "primary": patterns[0]["code"], "patterns": patterns, "status": "waste_detected",
+        "summary": patterns[0]["label"],
+    }
+
+
+def annotate_run_waste(receipts: list[dict[str, object]]) -> list[dict[str, object]]:
+    for receipt in receipts:
+        receipt["waste_analysis"] = analyze_run_waste(receipt)
+    return receipts
+
+
+def waste_summary(receipts: list[dict[str, object]]) -> dict[str, object]:
+    counts: dict[str, int] = {}
+    for receipt in receipts:
+        analysis = receipt.get("waste_analysis") or {}
+        if not isinstance(analysis, dict):
+            continue
+        for pattern in analysis.get("patterns") or []:
+            if isinstance(pattern, dict) and pattern.get("code"):
+                code = str(pattern["code"])
+                counts[code] = counts.get(code, 0) + 1
+    ordered = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+    return {
+        "runs_with_waste": sum(
+            isinstance(receipt.get("waste_analysis"), dict)
+            and receipt["waste_analysis"].get("status") == "waste_detected"
+            for receipt in receipts
+        ),
+        "pattern_counts": dict(ordered),
+        "top_pattern": ordered[0][0] if ordered else None,
     }
 
 
@@ -890,6 +1003,7 @@ def parse_codex_events(log_path: Path) -> dict[str, object]:
     usage = None
     changed_files: set[str] = set()
     commands_started = 0
+    commands: list[str] = []
     for line in log_path.read_text(errors="replace").splitlines():
         try:
             event = json.loads(line)
@@ -908,6 +1022,9 @@ def parse_codex_events(log_path: Path) -> dict[str, object]:
             changed_files.update(str(change.get("path")) for change in item.get("changes", []) if change.get("path"))
         if event_type == "item.started" and item.get("type") == "command_execution":
             commands_started += 1
+            command = item.get("command")
+            if isinstance(command, str):
+                commands.append(command)
     return {
         "counts": counts,
         "thread_id": thread_id,
@@ -915,6 +1032,7 @@ def parse_codex_events(log_path: Path) -> dict[str, object]:
         "usage": usage,
         "changed_files": sorted(changed_files),
         "commands_started": commands_started,
+        "commands": commands,
         "unparsed_lines": parse_errors,
     }
 
@@ -1742,7 +1860,9 @@ def show_benchmark(args: argparse.Namespace) -> int:
     root = Path(args.directory).resolve()
     receipts = load_receipts(root)
     annotate_token_savings(receipts)
+    annotate_run_waste(receipts)
     summary = token_savings_summary(receipts)
+    waste = waste_summary(receipts)
     print("BUILDBRAKE TOKEN BENCHMARK")
     print(f"Agent runs: {sum(item.get('run_type') == 'ai_agent' for item in receipts)}")
     print(f"Runs with a comparable baseline: {summary['measured_runs']}")
@@ -1753,6 +1873,9 @@ def show_benchmark(args: argparse.Namespace) -> int:
     direction = "saved" if net >= 0 else "spent above baseline"
     print(f"Estimated net: {abs(net):,} new tokens {direction}")
     print(f"Runs below baseline: {summary['runs_saving_tokens']} / {summary['measured_runs']}")
+    print(f"Runs with an observable waste pattern: {waste['runs_with_waste']}")
+    if waste["top_pattern"]:
+        print(f"Most frequent pattern: {str(waste['top_pattern']).replace('_', ' ')}")
     print("Method: median of earlier comparable runs; this does not prove BuildBrake caused the difference.")
     return 0
 

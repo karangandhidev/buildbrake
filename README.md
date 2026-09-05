@@ -131,6 +131,8 @@ AI receipts show new input tokens, commands, files changed, and runtime separate
 
 BuildBrake also estimates whether each run used fewer tokens than its historical baseline. It compares a run with the median of earlier runs using the same task size and model, preferring similar task wording, and waits for at least three comparable earlier runs. The dashboard and `buildbrake benchmark` show net estimated savings—or extra spend—and always label the result as a comparison rather than proof that BuildBrake caused it.
 
+The same benchmark identifies observable waste patterns: reused-context overhead, excessive inspection, repeated broad scans or commands, high-cost runs with no code output, expanded file scope, and broad verification for small tasks. Each receipt shows the evidence and one concrete next action. When a reused thread consumes above-target tokens while issuing few commands and changing at most one file, BuildBrake automatically starts the next task with a fresh compact handoff instead of carrying that costly conversation forward.
+
 ```bash
 ./bb agent
 ```

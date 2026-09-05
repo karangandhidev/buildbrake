@@ -14,9 +14,9 @@ from pathlib import Path
 from urllib.parse import quote, urlparse
 
 from buildbrake.cli import (
-    CONTRACT_FILE, RECEIPTS_DIR, STATE_DIR, TASK_FILE, annotate_token_savings, calculate_efficiency,
+    CONTRACT_FILE, RECEIPTS_DIR, STATE_DIR, TASK_FILE, annotate_run_waste, annotate_token_savings, calculate_efficiency,
     codex_thread_rotation_reason, forecast_performance, load_codex_thread, load_receipts,
-    model_performance, parse_codex_events, plan_agent_run, token_savings_summary,
+    model_performance, parse_codex_events, plan_agent_run, token_savings_summary, waste_summary,
 )
 
 
@@ -236,6 +236,7 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
                         item["interpretation"] = receipt_interpretation(item)
                         receipts.append(item)
                 annotate_token_savings(receipts)
+                annotate_run_waste(receipts)
                 saved_thread = load_codex_thread(root)
                 saved_task_path = root / STATE_DIR / TASK_FILE
                 saved_task = json.loads(saved_task_path.read_text()) if saved_task_path.is_file() else None
@@ -249,6 +250,7 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
                     "model_performance": model_performance(receipts),
                     "forecast_performance": forecast_performance(receipts),
                     "token_savings_summary": token_savings_summary(receipts),
+                    "waste_summary": waste_summary(receipts),
                     "project_root": str(root.resolve()),
                     "codex_context_saved": saved_thread is not None,
                     "codex_context_rotation_reason": codex_thread_rotation_reason(root, saved_thread) if saved_thread else None,

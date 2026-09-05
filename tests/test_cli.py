@@ -73,6 +73,59 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertIn("BUILDBRAKE TOKEN BENCHMARK", result.stdout)
         self.assertIn("collecting data", result.stdout)
 
+    def test_waste_analyzer_detects_reused_context_overhead(self):
+        from buildbrake.cli import analyze_run_waste
+
+        receipt = {
+            "run_type": "ai_agent", "task_mode": "small", "thread_reused": True,
+            "changed_files": ["src/app.py"], "agent_events": {
+                "commands_started": 2,
+                "usage": {"input_tokens": 70_000, "cached_input_tokens": 10_000},
+            },
+        }
+        analysis = analyze_run_waste(receipt)
+        self.assertEqual(analysis["primary"], "context_overhead")
+        self.assertIn("Start the next related task in a fresh thread", analysis["patterns"][0]["recommendation"])
+
+    def test_waste_analyzer_distinguishes_inspection_and_no_output(self):
+        from buildbrake.cli import analyze_run_waste
+
+        receipt = {
+            "run_type": "ai_agent", "task_mode": "small", "thread_reused": False,
+            "changed_files": [], "agent_events": {
+                "commands_started": 7,
+                "usage": {"input_tokens": 30_000, "cached_input_tokens": 0},
+            },
+        }
+        codes = [item["code"] for item in analyze_run_waste(receipt)["patterns"]]
+        self.assertIn("inspection_loop", codes)
+        self.assertIn("no_output", codes)
+        self.assertNotIn("context_overhead", codes)
+
+    def test_context_rotation_reacts_to_measured_context_overhead(self):
+        from buildbrake.cli import save_codex_thread, codex_thread_rotation_reason
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            save_codex_thread(root, "thread-12345678", "gpt-5.6-luna")
+            receipts = root / ".buildbrake/receipts"
+            receipts.mkdir()
+            (receipts / "latest.json").write_text(json.dumps({
+                "run_type": "ai_agent", "task_mode": "small", "thread_reused": True,
+                "changed_files": ["src/app.py"], "agent_events": {
+                    "thread_id": "thread-12345678", "commands_started": 2,
+                    "usage": {"input_tokens": 60_000, "cached_input_tokens": 0},
+                },
+            }))
+            reason = codex_thread_rotation_reason(root, "thread-12345678", "small", "change app color")
+        self.assertIn("dominated by conversation context", reason)
+
+    def test_dashboard_displays_waste_signal_and_recommendation(self):
+        html = (ROOT / "src/buildbrake/static/index.html").read_text()
+        self.assertIn("runs with visible waste", html)
+        self.assertIn("Waste signal ·", html)
+        self.assertIn("wastePatterns[0].recommendation", html)
+
     def test_task_cost_estimate_prefers_similar_runs_and_uses_median(self):
         from buildbrake.cli import estimate_task_cost
 
@@ -906,7 +959,7 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertIn('<div class="run-layout">', html)
         self.assertIn('<div class="run-primary">', html)
         self.assertIn('<aside class="run-resources"><div><strong>Usage</strong>', html)
-        self.assertIn('<div><strong>Resource comparison</strong>${efficiencyLabel}${costDiagnosis}</div></aside>', html)
+        self.assertIn('<div><strong>Resource comparison</strong>${efficiencyLabel}${costDiagnosis}${wasteAnalysis}</div></aside>', html)
         primary = html[html.index('<div class="run-primary-meta">'):html.index('</div>${interpretation}')]
         labels = [
             "<strong>${isAgent ? 'Codex thread' : 'Run type'}</strong>",
