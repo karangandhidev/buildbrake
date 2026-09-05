@@ -18,6 +18,47 @@ BuildBrake's micro fast path is tested on a separate dependency-free project so 
 
 The run met the initial target of fewer than 10,000 new tokens. One flaw was found: the local ranker selected the test file even though `index.html` was named explicitly. The ranker was updated after this trial to prioritize exact file mentions. More trials are required before claiming repeatable savings.
 
+Direct Codex on an identical checkout used 60,081 total input tokens: 48,128 cached and 11,953 new. Both runs produced the same one-line change and passed the same assertion. BuildBrake used 43.9% fewer new tokens and 23.6% fewer total input tokens.
+
+## Trial 2 — exact copy replacement
+
+The execution order was reversed: direct Codex ran before BuildBrake.
+
+| Measurement | BuildBrake | Direct Codex |
+|---|---:|---:|
+| New input tokens | 6,027 | 7,278 |
+| Cached input tokens | 24,064 | 52,224 |
+| Total input tokens | 30,091 | 59,502 |
+| Agent shell commands | 0 | 2 |
+| Independent result | Proved | Proved |
+
+BuildBrake used 17.2% fewer new tokens and 49.4% fewer total input tokens.
+
+## Trial 3 — exact accessibility attribute
+
+BuildBrake ran before direct Codex. Both started from the same commit and passed the same pre-committed assertion.
+
+| Measurement | BuildBrake | Direct Codex |
+|---|---:|---:|
+| New input tokens | 5,993 | 7,403 |
+| Cached input tokens | 24,064 | 52,224 |
+| Total input tokens | 30,057 | 59,627 |
+| Agent shell commands | 0 | 2 |
+| Independent result | Proved | Proved |
+
+BuildBrake used 19.0% fewer new tokens and 49.6% fewer total input tokens.
+
+## Three-trial result
+
+| Measurement | BuildBrake | Direct Codex | Difference |
+|---|---:|---:|---:|
+| New input tokens | 18,726 | 26,634 | 29.7% lower |
+| Total input tokens | 106,022 | 179,210 | 40.8% lower |
+| Agent shell commands | 1 | 6 | 83.3% lower |
+| Proved outcomes | 3/3 | 3/3 | equal |
+
+This is encouraging but still a small benchmark of precise one-file tasks. It supports the micro fast path; it does not yet establish savings for general coding work.
+
 ### Direct Codex control
 
 The same pre-change Git commit received the exact same user task in a separate worktree. It used the same `gpt-5.6-luna` model, low reasoning, workspace-write sandbox, and a fresh session, but did not receive BuildBrake's constraints or context packet.
