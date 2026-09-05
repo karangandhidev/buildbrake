@@ -87,6 +87,33 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertEqual(analysis["primary"], "context_overhead")
         self.assertIn("Start the next related task in a fresh thread", analysis["patterns"][0]["recommendation"])
 
+    def test_micro_tasks_are_narrow_ui_or_copy_edits_only(self):
+        from buildbrake.cli import is_micro_task
+
+        self.assertTrue(is_micro_task("Add 24px margin below the receipt heading"))
+        self.assertTrue(is_micro_task("Change the button color in src/app.css"))
+        self.assertFalse(is_micro_task("Redesign the entire application interface"))
+        self.assertFalse(is_micro_task("Add API authentication and migrate the database"))
+
+    def test_micro_profile_has_a_real_sub_10k_target(self):
+        from buildbrake.cli import RESOURCE_TARGETS
+
+        self.assertEqual(RESOURCE_TARGETS["micro"]["new_tokens"], 10_000)
+        self.assertEqual(RESOURCE_TARGETS["micro"]["commands"], 3)
+        self.assertEqual(RESOURCE_TARGETS["micro"]["files"], 1)
+
+    def test_local_context_packet_prioritizes_explicitly_named_file(self):
+        from buildbrake.cli import local_context_packet
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "index.html").write_text("<style>.bookmark { color: blue; }</style>")
+            (root / "test_app.py").write_text("index.html bookmark border-left color blue")
+            packet = local_context_packet(
+                root, "In index.html add a border-left to the bookmark", "small", max_files=1,
+            )
+        self.assertEqual(packet["files"], ["index.html"])
+
     def test_waste_analyzer_distinguishes_inspection_and_no_output(self):
         from buildbrake.cli import analyze_run_waste
 
@@ -1030,7 +1057,7 @@ class BuildBrakeTests(unittest.TestCase):
         html = dashboard_html().decode()
         self.assertIn("No files changed", html)
         self.assertIn("Agent's raw finding", html)
-        self.assertEqual(html.count("${esc(r.task_mode)} mode"), 1)
+        self.assertEqual(html.count("${esc(r.execution_profile || r.task_mode)} execution"), 1)
 
     def test_dashboard_distinguishes_agent_claims_from_buildbrake_verification(self):
         html = (ROOT / "src/buildbrake/static/index.html").read_text()

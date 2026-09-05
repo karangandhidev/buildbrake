@@ -1153,6 +1153,11 @@ SUBJECTIVE_OUTCOME_WORDS = {
     "font", "height", "hover", "icon", "layout", "margin", "padding", "spacing", "transition",
     "width",
 }
+MICRO_TASK_WORDS = {
+    "align", "alignment", "button", "color", "colour", "copy", "css", "font",
+    "height", "icon", "label", "margin", "padding", "placeholder", "spacing",
+    "text", "tooltip", "transition", "width",
+}
 
 
 def classify_task(prompt: str) -> str:
@@ -1167,6 +1172,20 @@ def classify_task(prompt: str) -> str:
     ))
     compound_scope = action_count >= 4
     return "standard" if broad_scope or compound_scope else "small"
+
+
+def is_micro_task(prompt: str) -> bool:
+    """Identify narrow presentation/copy edits suitable for a minimal fresh context."""
+    if classify_task(prompt) != "small":
+        return False
+    normalized = " ".join(prompt.lower().split())
+    words = meaningful_words(prompt)
+    actions = len(re.findall(
+        r"\b(?:add|change|fix|make|match|move|remove|replace|turn|update)\b", normalized,
+    ))
+    explicit_file = bool(re.search(r"\b[\w./-]+\.(?:css|html|js|jsx|ts|tsx|py)\b", normalized))
+    narrow_target = bool(words & MICRO_TASK_WORDS)
+    return actions <= 2 and (explicit_file or narrow_target)
 
 
 def requires_human_review(prompt: str) -> bool:
@@ -1191,6 +1210,7 @@ def agent_reported_failure(receipt: dict[str, object]) -> bool:
 
 
 RESOURCE_TARGETS = {
+    "micro": {"new_tokens": 10_000, "commands": 3, "files": 1, "seconds": 120},
     "small": {"new_tokens": 20_000, "commands": 4, "files": 3, "seconds": 180},
     "standard": {"new_tokens": 50_000, "commands": 12, "files": 10, "seconds": 900},
 }
@@ -1204,7 +1224,7 @@ def calculate_efficiency(receipt: dict[str, object]) -> dict[str, object]:
     total_tokens = int(usage.get("input_tokens") or 0)
     cached_tokens = int(usage.get("cached_input_tokens") or 0)
     new_tokens = max(0, total_tokens - cached_tokens)
-    mode = str(receipt.get("task_mode") or classify_task(str(receipt.get("agent_prompt") or "")))
+    mode = str(receipt.get("execution_profile") or receipt.get("task_mode") or classify_task(str(receipt.get("agent_prompt") or "")))
     if mode not in RESOURCE_TARGETS:
         mode = "standard"
     configured_targets = RESOURCE_TARGETS[mode]
@@ -1330,6 +1350,7 @@ def local_context_packet(
         return {term[:-1] if term.endswith("s") and len(term) > 5 else term for term in terms}
 
     query = normalized_terms(prompt)
+    normalized_prompt = prompt.lower().replace("\\", "/")
     ranked: list[tuple[int, str, list[str], list[tuple[int, int]]]] = []
     for relative in manifest:
         path = root / relative
@@ -1352,6 +1373,11 @@ def local_context_packet(
         score = len(query & path_terms) * 6 + strongest_line * 8 + min(content_hits, 6)
         if relative in proved_files:
             score += 6
+        normalized_relative = relative.lower().replace("\\", "/")
+        if normalized_relative in normalized_prompt:
+            score += 100
+        elif Path(relative).name.lower() in normalized_prompt:
+            score += 50
         if relative.startswith(("src/", "app/", "lib/")):
             score += 2
         if relative.startswith(("tests/", "test/")):
@@ -1507,8 +1533,16 @@ def run_agent(args: argparse.Namespace) -> int:
         saved_mode if args.mode == "auto" and saved_mode in ("small", "standard")
         else classify_task(prompt) if args.mode == "auto" else args.mode
     )
-    limits = {"max_commands": 6, "max_files": 3} if task_mode == "small" else None
+    micro = task_mode == "small" and is_micro_task(prompt)
+    execution_profile = "micro" if micro else task_mode
+    limits = (
+        {"max_commands": 3, "max_files": 1} if micro
+        else {"max_commands": 6, "max_files": 3} if task_mode == "small" else None
+    )
     mode_constraint = (
+        "- This is a micro task: edit the supplied target immediately; use at most 3 shell commands and change at most 1 file.\n"
+        "- Do not scan the repository. If the supplied excerpt is insufficient, use one targeted search in the named file, then edit or stop.\n"
+        if micro else
         "- This is a small task: aim for 4 shell commands; a maximum of 6 is allowed only for targeted recovery or verification. Change at most 3 files.\n"
         "- Use one targeted discovery command. If rg is unavailable, do not retry broadly; use targeted grep/find.\n"
         "- Exclude .buildbrake, .git, .venv, build, dist, target, and node_modules from searches.\n"
@@ -1518,7 +1552,7 @@ def run_agent(args: argparse.Namespace) -> int:
     historical_receipts = load_receipts(root)
     run_plan = plan_agent_run(
         root, prompt, task_mode, requested_model,
-        force_fresh=getattr(args, "fresh", False), receipts=historical_receipts,
+        force_fresh=getattr(args, "fresh", False) or micro, receipts=historical_receipts,
     )
     planned_model = run_plan["model"]
     agent_model = planned_model if isinstance(planned_model, str) else None
@@ -1531,7 +1565,8 @@ def run_agent(args: argparse.Namespace) -> int:
     reuse_estimate = run_plan["reuse_estimate"] or {}
     fresh_estimate = run_plan["fresh_estimate"] or {}
     context_packet = local_context_packet(
-        root, prompt, task_mode, max_chars=900 if thread_id else 4_000,
+        root, prompt, task_mode, max_files=1 if micro else 3,
+        max_chars=2_500 if micro else 900 if thread_id else 4_000,
         include_excerpts=thread_id is None,
     )
     context_text = str(context_packet["text"])
@@ -1553,7 +1588,10 @@ def run_agent(args: argparse.Namespace) -> int:
         if prompt.strip().lower() in contract.success.lower()
         else f"- The observable success target is: {contract.success}\n"
     )
-    print(f"Task mode: {task_mode}" + (" · aim 4 commands · hard max 6 · max 3 files" if limits else ""))
+    print(
+        f"Task mode: {task_mode} · {execution_profile} execution"
+        + (" · hard max 3 commands · max 1 file" if micro else " · aim 4 commands · hard max 6 · max 3 files" if limits else "")
+    )
     guarded_prompt = (
         f"{prompt.strip()}\n\n"
         "BuildBrake outcome constraint:\n"
@@ -1588,6 +1626,7 @@ def run_agent(args: argparse.Namespace) -> int:
             "verification_command": verification_command,
             "verification_mode": verification_mode,
             "task_mode": task_mode,
+            "execution_profile": execution_profile,
             "thread_reused": thread_id is not None,
             "context_decision": context_decision,
             "context_rotation_reason": rotation_reason,

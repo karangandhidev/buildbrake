@@ -133,6 +133,8 @@ BuildBrake also estimates whether each run used fewer tokens than its historical
 
 The same benchmark identifies observable waste patterns: reused-context overhead, excessive inspection, repeated broad scans or commands, high-cost runs with no code output, expanded file scope, and broad verification for small tasks. Each receipt shows the evidence and one concrete next action. When a reused thread consumes above-target tokens while issuing few commands and changing at most one file, BuildBrake automatically starts the next task with a fresh compact handoff instead of carrying that costly conversation forward.
 
+Narrow CSS, copy, spacing, label, icon, and one-component tasks use a micro fast path. BuildBrake starts a clean low-reasoning session, supplies at most one locally ranked file excerpt capped at 2,500 characters, allows three agent commands and one changed file, and targets fewer than 10,000 new tokens. Verification runs separately after the agent exits. Broader work continues to use small or standard execution.
+
 ```bash
 ./bb agent
 ```
