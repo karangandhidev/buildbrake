@@ -63,6 +63,10 @@ They are aliases for the same command. If your shell cannot find `bb`, the
 installer prints one copy-friendly command and an absolute command you can use
 immediately. The repository is currently private, so GitHub access is required.
 
+Invited testers can follow the [10-minute private-beta test](docs/BETA_TEST.md)
+and report the first confusing or wasteful step through the repository's
+structured **Beta feedback** form.
+
 On first launch, BuildBrake creates its local state automatically and opens the
 dashboard. Enter one concrete task under **What should the agent do?** and click
 **Check and save**. Use `buildbrake init` only when you want to define the full
@@ -186,7 +190,7 @@ BuildBrake cannot decide whether a product idea is good. It makes the intended o
 
 ## License and security
 
-BuildBrake is available under the [MIT License](LICENSE). Please report
-vulnerabilities through GitHub private vulnerability reporting and review the
-[local trust model](SECURITY.md) before exposing the dashboard beyond its
-default localhost address.
+BuildBrake is available under the [MIT License](LICENSE). Read the
+[contribution guide](CONTRIBUTING.md) before proposing a change. Please follow
+the [security policy and local trust model](SECURITY.md) before exposing the
+dashboard beyond its default localhost address.

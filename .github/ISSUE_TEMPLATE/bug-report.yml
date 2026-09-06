@@ -1,0 +1,34 @@
+name: Bug report
+description: Report reproducible BuildBrake behavior that is incorrect.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Do not paste credentials, private code, or an unredacted receipt.
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal reproduction
+      description: Include commands and inputs that are safe to share.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include OS, `bb --version`, and redacted `bb doctor` output.
+    validations:
+      required: true
