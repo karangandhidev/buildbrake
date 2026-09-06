@@ -1381,8 +1381,14 @@ def local_context_packet(
 
     query = normalized_terms(prompt)
     normalized_prompt = prompt.lower().replace("\\", "/")
+    tests_are_read_only = bool(re.search(
+        r"\b(?:do not|don't|without)\s+(?:change|changing|edit|editing|modify|modifying)\s+(?:the\s+)?tests?\b",
+        normalized_prompt,
+    ))
     ranked: list[tuple[int, str, list[str], list[tuple[int, int]]]] = []
     for relative in manifest:
+        if tests_are_read_only and relative.startswith(("tests/", "test/")):
+            continue
         path = root / relative
         try:
             if path.stat().st_size > 250_000:

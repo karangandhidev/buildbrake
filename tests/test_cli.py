@@ -136,6 +136,27 @@ class BuildBrakeTests(unittest.TestCase):
             )
         self.assertEqual(packet["files"], ["server.js"])
 
+    def test_local_context_packet_excludes_tests_declared_read_only(self):
+        from buildbrake.cli import local_context_packet
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "components").mkdir()
+            (root / "test").mkdir()
+            (root / "components/search-bar.tsx").write_text(
+                "function clearSearch() { return 'search cleared'; }\n"
+            )
+            (root / "test/search-bar.test.js").write_text(
+                "test('Escape clears debounced issue search with accessible button semantics')\n"
+            )
+            packet = local_context_packet(
+                root,
+                "Make Escape clear the debounced issue search. Do not change tests.",
+                "small",
+                max_files=1,
+            )
+        self.assertEqual(packet["files"], ["components/search-bar.tsx"])
+
     def test_waste_analyzer_distinguishes_inspection_and_no_output(self):
         from buildbrake.cli import analyze_run_waste
 
