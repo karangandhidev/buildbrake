@@ -50,22 +50,23 @@ fi
 
 mkdir -p "$BIN_DIR"
 ln -sf "$INSTALL_ROOT/venv/bin/buildbrake" "$BIN_DIR/buildbrake"
+ln -sf "$INSTALL_ROOT/venv/bin/buildbrake" "$BIN_DIR/bb"
 
 echo
 echo "BuildBrake installed successfully."
 if [ "$EDITABLE" -eq 1 ]; then
   echo "Development mode: source edits are used directly."
 fi
-echo "Command: $BIN_DIR/buildbrake"
+echo "Commands: $BIN_DIR/bb (short) and $BIN_DIR/buildbrake (full)"
 
 case ":$PATH:" in
   *":$BIN_DIR:"*)
-    "$BIN_DIR/buildbrake" --help >/dev/null
-    echo "Run it from any project with: buildbrake serve"
+    "$BIN_DIR/bb" --help >/dev/null
+    echo "Run it from any project with: bb serve"
     ;;
   *)
     echo "Add this directory to PATH, then open a new terminal:"
     echo "  export PATH=\"$BIN_DIR:\$PATH\""
-    echo "You can use it immediately with: $BIN_DIR/buildbrake serve"
+    echo "You can use it immediately with: $BIN_DIR/bb serve"
     ;;
 esac

@@ -10,20 +10,11 @@ It answers three questions after every run:
 
 Everything stays on your computer. It uses Python's standard library and makes no network requests.
 
-## Try it
+## Install and run
 
 Python 3.9 or newer is required.
 
-For the included project demo, no installation is needed:
-
-```bash
-cd "/Users/karan/Super Dev/BuildBrake"
-./bb serve
-```
-
-That opens the real receipt created while BuildBrake tested itself.
-
-To install `buildbrake` as a command for use in other projects:
+Clone once and install:
 
 ```bash
 git clone https://github.com/karangandhidev/buildbrake.git
@@ -31,16 +22,18 @@ cd buildbrake
 ./install.sh
 ```
 
-The installer creates an isolated environment under your user account and makes
-the `buildbrake` command available without requiring virtual-environment
-activation. The repository is currently private, so GitHub access is required.
-
-Open BuildBrake directly in a project you want to guard:
+Then open any project and start BuildBrake:
 
 ```bash
 cd /path/to/your/project
-buildbrake serve
+bb serve
 ```
+
+The installer creates an isolated environment under your user account and makes
+both `bb` and `buildbrake` available without virtual-environment activation.
+They are aliases for the same command. If your shell cannot find `bb`, the
+installer prints one copy-friendly command and an absolute command you can use
+immediately. The repository is currently private, so GitHub access is required.
 
 On first launch, BuildBrake creates its local state automatically and opens the
 dashboard. Enter one concrete task under **What should the agent do?** and click
@@ -51,13 +44,13 @@ is ignored by Git by default, so using BuildBrake does not dirty the project.
 Then run a command through BuildBrake:
 
 ```bash
-buildbrake run -- npm test
+bb run -- npm test
 ```
 
 Run a genuine Codex coding-agent session under the same contract and budget:
 
 ```bash
-buildbrake agent --prompt "Implement the smallest change that proves the target"
+bb agent --prompt "Implement the smallest change that proves the target"
 ```
 
 When developing BuildBrake itself, install it once in editable mode:
