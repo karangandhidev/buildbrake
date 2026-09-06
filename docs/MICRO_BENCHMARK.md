@@ -155,6 +155,33 @@ BuildBrake used 47.0% fewer new tokens, 29.1% fewer total input tokens, and 40% 
 
 Trial 8 is the first complete user-facing feature in the controlled set. It supports the hypothesis that constrained context and external verification can reduce waste beyond micro-edits, but the sample still represents one small dependency-free project.
 
+## Trial 9 — noisy repository and backend behavior
+
+This trial used Substation, a repository with 621 tracked files because dependencies had been committed, but only six relevant project files after excluding `node_modules`. The backend task added correct retry timing and an HTTP `Retry-After` header for two rate-limiter algorithms. Two failing HTTP acceptance tests were committed in an isolated worktree before either agent ran.
+
+| Measurement | BuildBrake | Direct Codex |
+|---|---:|---:|
+| New input tokens | 12,668 | 13,031 |
+| Cached input tokens | 72,448 | 129,024 |
+| Total input tokens | 85,116 | 142,055 |
+| Agent shell commands | 3 | 4 |
+| Changed files | 1 | 1 |
+| Runtime | 37.9s | 57.5s |
+| Independent result | Proved | Proved |
+
+BuildBrake used only 2.8% fewer new tokens in this trial, but 40.1% fewer total input tokens, one fewer command, and 34.1% less runtime. Its initial context packet incorrectly ranked descriptive frontend copy above the server implementation. The agent recovered with targeted inspection; afterward, the ranker was updated to prioritize a Node package's declared `main` entry point, with regression coverage.
+
+## Nine-trial result
+
+| Measurement | BuildBrake | Direct Codex | Difference |
+|---|---:|---:|---:|
+| New input tokens | 71,884 | 111,624 | **35.6% lower** |
+| Total input tokens | 489,932 | 728,584 | **32.8% lower** |
+| Agent shell commands | 12 | 25 | **52.0% lower** |
+| Proved outcomes | 9/9 | 9/9 | equal |
+
+Trial 9 shows that directory exclusions prevent committed dependencies from flooding the agent context. It also demonstrates why aggregate claims are more honest than promising a large fresh-token saving on every run.
+
 ### Direct Codex control
 
 The same pre-change Git commit received the exact same user task in a separate worktree. It used the same `gpt-5.6-luna` model, low reasoning, workspace-write sandbox, and a fresh session, but did not receive BuildBrake's constraints or context packet.

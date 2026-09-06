@@ -115,6 +115,27 @@ class BuildBrakeTests(unittest.TestCase):
             )
         self.assertEqual(packet["files"], ["index.html"])
 
+    def test_local_context_packet_prioritizes_declared_node_entrypoint(self):
+        from buildbrake.cli import local_context_packet
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "package.json").write_text('{"main":"server.js"}')
+            (root / "server.js").write_text(
+                "function checkTokenBucket() { return { allowed: false }; }\n"
+            )
+            (root / "public").mkdir()
+            (root / "public/index.html").write_text(
+                "<h1>Token bucket and sliding window rate limiter</h1>\n"
+            )
+            packet = local_context_packet(
+                root,
+                "Add retry timing to denied token bucket and sliding window responses",
+                "small",
+                max_files=1,
+            )
+        self.assertEqual(packet["files"], ["server.js"])
+
     def test_waste_analyzer_distinguishes_inspection_and_no_output(self):
         from buildbrake.cli import analyze_run_waste
 

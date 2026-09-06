@@ -1344,6 +1344,15 @@ def local_context_packet(
         return {"text": "", "files": [], "characters": 0, "manifest_files": 0}
     manifest = project_manifest(root, limit=200)
     _, proved_files = compact_project_handoff(root, prompt, mode)
+    declared_entrypoints: set[str] = set()
+    package_path = root / "package.json"
+    try:
+        package_data = json.loads(package_path.read_text())
+        package_main = package_data.get("main") if isinstance(package_data, dict) else None
+        if isinstance(package_main, str):
+            declared_entrypoints.add(package_main.removeprefix("./").replace("\\", "/"))
+    except (OSError, json.JSONDecodeError):
+        pass
 
     def normalized_terms(value: str) -> set[str]:
         terms = {
@@ -1377,6 +1386,8 @@ def local_context_packet(
         if relative in proved_files:
             score += 6
         normalized_relative = relative.lower().replace("\\", "/")
+        if normalized_relative in declared_entrypoints:
+            score += 40
         if normalized_relative in normalized_prompt:
             score += 100
         elif Path(relative).name.lower() in normalized_prompt:
