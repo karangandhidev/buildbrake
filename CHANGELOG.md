@@ -4,7 +4,7 @@ All notable changes to BuildBrake are documented here.
 
 ## 0.1.0 — 2026-09-06
 
-Initial private-beta release.
+Initial public release.
 
 - Guard Codex tasks with outcome, runtime, command, and changed-file limits.
 - Classify task size and provide bounded local context before the agent runs.

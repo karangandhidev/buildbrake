@@ -23,6 +23,10 @@ account.
 
 Python 3.9 or newer is required.
 
+BuildBrake supports macOS and Linux. On Windows, use WSL2 and run both
+BuildBrake and your project inside it. Native Windows is not supported in
+v0.1. See the [platform notes and first-run guide](docs/GETTING_STARTED.md).
+
 BuildBrake uses Codex CLI as its coding agent. Install Codex and sign in with
 your own ChatGPT account first:
 
@@ -61,11 +65,7 @@ The installer creates an isolated environment under your user account and makes
 both `bb` and `buildbrake` available without virtual-environment activation.
 They are aliases for the same command. If your shell cannot find `bb`, the
 installer prints one copy-friendly command and an absolute command you can use
-immediately. The repository is currently private, so GitHub access is required.
-
-Invited testers can follow the [10-minute private-beta test](docs/BETA_TEST.md)
-and report the first confusing or wasteful step through the repository's
-structured **Beta feedback** form.
+immediately.
 
 On first launch, BuildBrake creates its local state automatically and opens the
 dashboard. Enter one concrete task under **What should the agent do?** and click

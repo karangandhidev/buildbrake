@@ -1,0 +1,33 @@
+name: Feature request
+description: Suggest a concrete improvement to BuildBrake.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: Describe the problem first. Please do not paste private source code, credentials, or an unredacted receipt.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem did you encounter?
+      description: Explain what was confusing, wasteful, or impossible.
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: What do you do today?
+      description: Describe the current workaround, including running Codex directly when relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: success
+    attributes:
+      label: What observable result would solve it?
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Optional redacted receipt ID or screenshots without private project data.

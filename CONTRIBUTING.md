@@ -1,6 +1,6 @@
 # Contributing
 
-BuildBrake is in private beta. Small, evidence-backed changes are preferred.
+Small, evidence-backed changes are preferred.
 
 ## Development setup
 
