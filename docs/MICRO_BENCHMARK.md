@@ -103,6 +103,31 @@ The task renamed a function in `stats.py` and updated its import and call in `re
 
 Four trials used the micro fast path; one tested Python logic and one deliberately crossed into a two-file small-task profile. Execution order alternated between BuildBrake-first and direct-first. The sample remains too small for a general claim, but the advantage has persisted beyond CSS and copy changes.
 
+## Trial 7 — implicit implementation file
+
+The task requested a label change without naming a file. BuildBrake's local ranker supplied the failing test as its one-file context packet; the agent followed the imported symbol with one targeted search and changed only `report.py`. Direct Codex made the same change, but its self-selected `pytest` verification failed because that executable was unavailable. The independent `unittest` proof passed for both checkouts.
+
+| Measurement | BuildBrake | Direct Codex |
+|---|---:|---:|
+| New input tokens | 6,481 | 5,342 |
+| Cached input tokens | 39,168 | 54,272 |
+| Total input tokens | 45,649 | 59,614 |
+| Agent shell commands | 1 | 2 |
+| Independent result | Proved | Proved |
+
+This is the first trial where BuildBrake used more new tokens: 21.3% more than direct Codex. It still used 23.4% fewer total input tokens and half as many agent commands. The result is evidence that the fast path reduces waste on average, not a guarantee that every individual run will use fewer fresh tokens.
+
+## Seven-trial result
+
+| Measurement | BuildBrake | Direct Codex | Difference |
+|---|---:|---:|---:|
+| New input tokens | 47,733 | 76,921 | **37.9% lower** |
+| Total input tokens | 318,837 | 465,273 | **31.5% lower** |
+| Agent shell commands | 6 | 16 | **62.5% lower** |
+| Proved outcomes | 7/7 | 7/7 | equal |
+
+The seventh trial deliberately removed the filename hint. Aggregate savings remained substantial, while the per-run fresh-token result became mixed. Public claims should use the aggregate controlled result and state the seven-task sample size.
+
 ### Direct Codex control
 
 The same pre-change Git commit received the exact same user task in a separate worktree. It used the same `gpt-5.6-luna` model, low reasoning, workspace-write sandbox, and a fresh session, but did not receive BuildBrake's constraints or context packet.
