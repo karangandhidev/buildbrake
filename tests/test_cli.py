@@ -92,6 +92,7 @@ class BuildBrakeTests(unittest.TestCase):
 
         self.assertTrue(is_micro_task("Add 24px margin below the receipt heading"))
         self.assertTrue(is_micro_task("Change the button color in src/app.css"))
+        self.assertFalse(is_micro_task("Rename the helper in stats.py and update report.py"))
         self.assertFalse(is_micro_task("Redesign the entire application interface"))
         self.assertFalse(is_micro_task("Add API authentication and migrate the database"))
 

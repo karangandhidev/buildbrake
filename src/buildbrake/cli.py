@@ -1183,7 +1183,10 @@ def is_micro_task(prompt: str) -> bool:
     actions = len(re.findall(
         r"\b(?:add|change|fix|make|match|move|remove|replace|turn|update)\b", normalized,
     ))
-    explicit_file = bool(re.search(r"\b[\w./-]+\.(?:css|html|js|jsx|ts|tsx|py)\b", normalized))
+    explicit_files = set(re.findall(r"\b[\w./-]+\.(?:css|html|js|jsx|ts|tsx|py)\b", normalized))
+    if len(explicit_files) > 1:
+        return False
+    explicit_file = bool(explicit_files)
     narrow_target = bool(words & MICRO_TASK_WORDS)
     return actions <= 2 and (explicit_file or narrow_target)
 

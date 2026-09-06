@@ -59,6 +59,50 @@ BuildBrake used 19.0% fewer new tokens and 49.6% fewer total input tokens.
 
 This is encouraging but still a small benchmark of precise one-file tasks. It supports the micro fast path; it does not yet establish savings for general coding work.
 
+## Trial 4 — JavaScript behavior
+
+`normalizeTitle` was changed to collapse internal whitespace. Both runs passed the pre-committed Node-backed behavior test.
+
+| Measurement | BuildBrake | Direct Codex |
+|---|---:|---:|
+| New input tokens | 7,159 | 11,393 |
+| Total input tokens | 45,303 | 59,521 |
+| Agent shell commands | 1 | 2 |
+| Independent result | Proved | Proved |
+
+## Trial 5 — Python logic
+
+Integer floor division was corrected while preserving the empty-input behavior. Direct Codex attempted unavailable `python` and retried with `python3`; BuildBrake's verification remained outside the agent.
+
+| Measurement | BuildBrake | Direct Codex |
+|---|---:|---:|
+| New input tokens | 7,378 | 8,446 |
+| Total input tokens | 60,626 | 74,750 |
+| Agent shell commands | 1 | 3 |
+| Independent result | Proved | Proved |
+
+## Trial 6 — two-file Python refactor
+
+The task renamed a function in `stats.py` and updated its import and call in `report.py`. BuildBrake correctly rejected the one-file micro profile and used normal small execution with excerpts from both files.
+
+| Measurement | BuildBrake | Direct Codex |
+|---|---:|---:|
+| New input tokens | 7,989 | 25,106 |
+| Total input tokens | 61,237 | 92,178 |
+| Agent shell commands | 2 | 3 |
+| Independent result | Proved | Proved |
+
+## Six-trial result
+
+| Measurement | BuildBrake | Direct Codex | Difference |
+|---|---:|---:|---:|
+| New input tokens | 41,252 | 71,579 | **42.4% lower** |
+| Total input tokens | 273,188 | 405,659 | **32.7% lower** |
+| Agent shell commands | 5 | 14 | **64.3% lower** |
+| Proved outcomes | 6/6 | 6/6 | equal |
+
+Four trials used the micro fast path; one tested Python logic and one deliberately crossed into a two-file small-task profile. Execution order alternated between BuildBrake-first and direct-first. The sample remains too small for a general claim, but the advantage has persisted beyond CSS and copy changes.
+
 ### Direct Codex control
 
 The same pre-change Git commit received the exact same user task in a separate worktree. It used the same `gpt-5.6-luna` model, low reasoning, workspace-write sandbox, and a fresh session, but did not receive BuildBrake's constraints or context packet.
