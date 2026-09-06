@@ -6,11 +6,13 @@
 
 BuildBrake puts a clear outcome, resource limits, and proof around work performed by Codex.
 
+[Website](https://buildbrake.karangandhi.dev) · [Getting started](https://buildbrake.karangandhi.dev/docs/getting-started) · [CLI reference](https://buildbrake.karangandhi.dev/docs/cli) · [Security](https://buildbrake.karangandhi.dev/docs/security)
+
 Across nine controlled comparisons using identical tasks, models, and starting
 commits, BuildBrake used **35.6% fewer new input tokens**, **32.8% fewer total
 input tokens**, and **52% fewer agent commands**, with both approaches proving
 9/9 outcomes. These are small-sample benchmark results, not a guarantee for
-every task. Read the [method and individual results](docs/MICRO_BENCHMARK.md).
+every task. Read the [method and individual results](https://buildbrake.karangandhi.dev/docs/benchmarks).
 
 It answers three questions after every run:
 

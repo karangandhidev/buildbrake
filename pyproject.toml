@@ -20,7 +20,8 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/karangandhidev/buildbrake"
+Homepage = "https://buildbrake.karangandhi.dev"
+Documentation = "https://buildbrake.karangandhi.dev/docs"
 Repository = "https://github.com/karangandhidev/buildbrake"
 Issues = "https://github.com/karangandhidev/buildbrake/issues"
 
