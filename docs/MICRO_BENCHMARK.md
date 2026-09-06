@@ -128,6 +128,33 @@ This is the first trial where BuildBrake used more new tokens: 21.3% more than d
 
 The seventh trial deliberately removed the filename hint. Aggregate savings remained substantial, while the per-run fresh-token result became mixed. Public claims should use the aggregate controlled result and state the seven-task sample size.
 
+## Trial 8 — complete bookmark-creation feature
+
+This trial moved beyond isolated edits. The task required an accessible form, validation, bare-domain HTTPS normalization, dynamic DOM insertion, status feedback, form reset, and preservation of existing behavior. Four failing acceptance checks were committed before either run. Both agents started from that commit with identical task text and model settings.
+
+| Measurement | BuildBrake | Direct Codex |
+|---|---:|---:|
+| New input tokens | 11,483 | 21,672 |
+| Cached input tokens | 74,496 | 99,584 |
+| Total input tokens | 85,979 | 121,256 |
+| Agent shell commands | 3 | 5 |
+| Changed lines | 51 | 91 |
+| Runtime | 50.1s | 63.7s |
+| Independent result | Proved | Proved |
+
+BuildBrake used 47.0% fewer new tokens, 29.1% fewer total input tokens, and 40% fewer commands. Its implementation was also 44% smaller by changed-line count while satisfying the same 13-test suite. Direct Codex first attempted the unavailable `python` command, whereas BuildBrake was told that the configured `python3` suite would run externally.
+
+## Eight-trial result
+
+| Measurement | BuildBrake | Direct Codex | Difference |
+|---|---:|---:|---:|
+| New input tokens | 59,216 | 98,593 | **39.9% lower** |
+| Total input tokens | 404,816 | 586,529 | **31.0% lower** |
+| Agent shell commands | 9 | 21 | **57.1% lower** |
+| Proved outcomes | 8/8 | 8/8 | equal |
+
+Trial 8 is the first complete user-facing feature in the controlled set. It supports the hypothesis that constrained context and external verification can reduce waste beyond micro-edits, but the sample still represents one small dependency-free project.
+
 ### Direct Codex control
 
 The same pre-change Git commit received the exact same user task in a separate worktree. It used the same `gpt-5.6-luna` model, low reasoning, workspace-write sandbox, and a fresh session, but did not receive BuildBrake's constraints or context packet.
