@@ -1,6 +1,12 @@
 # BuildBrake
 
-BuildBrake puts a clear outcome and a time limit around work performed by a coding agent—or any long-running command.
+BuildBrake puts a clear outcome, resource limits, and proof around work performed by Codex.
+
+Across nine controlled comparisons using identical tasks, models, and starting
+commits, BuildBrake used **35.6% fewer new input tokens**, **32.8% fewer total
+input tokens**, and **52% fewer agent commands**, with both approaches proving
+9/9 outcomes. These are small-sample benchmark results, not a guarantee for
+every task. Read the [method and individual results](docs/MICRO_BENCHMARK.md).
 
 It answers three questions after every run:
 
@@ -8,7 +14,10 @@ It answers three questions after every run:
 2. How long did we spend?
 3. Did the command finish, get rejected at a checkpoint, or exhaust its budget?
 
-Everything stays on your computer. It uses Python's standard library and makes no network requests.
+BuildBrake's state and receipts stay on your computer. BuildBrake itself uses
+Python's standard library and does not send telemetry. It launches your own
+Codex CLI, which communicates with OpenAI under your Codex configuration and
+account.
 
 ## Install and run
 
@@ -174,3 +183,10 @@ buildbrake run --no-checkpoints -- npm test
 ## What v0.1 does not claim
 
 BuildBrake cannot decide whether a product idea is good. It makes the intended outcome explicit, limits how long execution may continue, and records what happened. The next version will use real sessions to determine whether deeper coding-agent integrations are justified.
+
+## License and security
+
+BuildBrake is available under the [MIT License](LICENSE). Please report
+vulnerabilities through GitHub private vulnerability reporting and review the
+[local trust model](SECURITY.md) before exposing the dashboard beyond its
+default localhost address.

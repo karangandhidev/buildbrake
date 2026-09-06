@@ -1,4 +1,5 @@
 import json
+import os
 import re
 import subprocess
 import sys
@@ -16,6 +17,16 @@ CLI = [sys.executable, "-m", "buildbrake.cli"]
 
 
 class BuildBrakeTests(unittest.TestCase):
+    def test_cli_reports_package_version(self):
+        from buildbrake import __version__
+
+        result = subprocess.run(
+            [*CLI, "--version"], cwd=ROOT, text=True, capture_output=True,
+            env={**os.environ, "PYTHONPATH": str(ROOT / "src")},
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout.strip(), f"BuildBrake {__version__}")
+
     def test_doctor_explains_how_to_install_missing_codex(self):
         from buildbrake.cli import CODEX_INSTALL_COMMAND, build_parser
 

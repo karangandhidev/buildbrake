@@ -8,8 +8,24 @@ version = "0.1.0"
 description = "A local outcome contract and runtime guard for coding-agent commands"
 requires-python = ">=3.9"
 dependencies = []
+license = {file = "LICENSE"}
+readme = "README.md"
+authors = [{name = "Karan Gandhi"}]
+keywords = ["codex", "coding-agent", "guardrails", "developer-tools"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+]
+
+[project.urls]
+Homepage = "https://github.com/karangandhidev/buildbrake"
+Repository = "https://github.com/karangandhidev/buildbrake"
+Issues = "https://github.com/karangandhidev/buildbrake/issues"
 
 [project.scripts]
+bb = "buildbrake.cli:main"
 buildbrake = "buildbrake.cli:main"
 
 [tool.setuptools.packages.find]

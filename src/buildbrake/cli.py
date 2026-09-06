@@ -2077,6 +2077,8 @@ def serve_dashboard(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="buildbrake", description="Put an outcome and time limit around agent work.")
+    from buildbrake import __version__
+    parser.add_argument("--version", action="version", version=f"BuildBrake {__version__}")
     parser.add_argument("--directory", "-C", default=".", help="project directory")
     sub = parser.add_subparsers(dest="action", required=True)
 
