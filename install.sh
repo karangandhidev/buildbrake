@@ -70,3 +70,26 @@ case ":$PATH:" in
     echo "You can use it immediately with: $BIN_DIR/bb serve"
     ;;
 esac
+
+echo
+CODEX_COMMAND=""
+if command -v codex >/dev/null 2>&1; then
+  CODEX_COMMAND=$(command -v codex)
+elif [ -x /Applications/ChatGPT.app/Contents/Resources/codex ]; then
+  CODEX_COMMAND=/Applications/ChatGPT.app/Contents/Resources/codex
+elif [ -x "$HOME/Applications/ChatGPT.app/Contents/Resources/codex" ]; then
+  CODEX_COMMAND="$HOME/Applications/ChatGPT.app/Contents/Resources/codex"
+fi
+
+if [ -z "$CODEX_COMMAND" ]; then
+  echo "Codex CLI is required for AI tasks and was not found."
+  echo "Install Codex:"
+  echo "  curl -fsSL https://chatgpt.com/codex/install.sh | sh"
+  echo "Then sign in by running: codex"
+elif "$CODEX_COMMAND" login status >/dev/null 2>&1; then
+  echo "Codex found and signed in. BuildBrake is ready."
+else
+  echo "Codex found, but sign-in is required."
+  echo "Run: codex"
+fi
+echo "Check setup anytime with: bb doctor"

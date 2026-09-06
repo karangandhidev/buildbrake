@@ -14,12 +14,31 @@ Everything stays on your computer. It uses Python's standard library and makes n
 
 Python 3.9 or newer is required.
 
+BuildBrake uses Codex CLI as its coding agent. Install Codex and sign in with
+your own ChatGPT account first:
+
+```bash
+curl -fsSL https://chatgpt.com/codex/install.sh | sh
+codex
+```
+
+Codex usage belongs to the account that signs in; BuildBrake never uses the
+project author's account or tokens. If the ChatGPT desktop app already provides
+Codex on macOS, BuildBrake detects its bundled executable automatically.
+
 Clone once and install:
 
 ```bash
 git clone https://github.com/karangandhidev/buildbrake.git
 cd buildbrake
 ./install.sh
+```
+
+The installer checks Codex readiness and prints the missing step. Recheck the
+whole setup at any time:
+
+```bash
+bb doctor
 ```
 
 Then open any project and start BuildBrake:

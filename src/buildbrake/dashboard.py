@@ -15,7 +15,7 @@ from urllib.parse import quote, urlparse
 
 from buildbrake.cli import (
     CONTRACT_FILE, RECEIPTS_DIR, STATE_DIR, TASK_FILE, annotate_run_waste, annotate_token_savings, calculate_efficiency,
-    codex_thread_rotation_reason, forecast_performance, load_codex_thread, load_receipts,
+    codex_setup_status, codex_thread_rotation_reason, forecast_performance, load_codex_thread, load_receipts,
     model_performance, parse_codex_events, plan_agent_run, token_savings_summary, waste_summary,
 )
 
@@ -257,6 +257,7 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
                     "task_saved": (root / STATE_DIR / TASK_FILE).is_file(),
                     "task_cost_estimate": cost_estimate,
                     "task_run_plan": run_plan,
+                    "codex_setup": codex_setup_status(),
                     "restart_required": backend_source_fingerprint() != startup_fingerprint,
                 }))
                 return
@@ -285,6 +286,13 @@ def make_handler(root: Path, run_manager: AgentRunManager, startup_fingerprint: 
                 body = self.read_json_body() if self.headers.get("Content-Length", "0") != "0" else {}
                 if body is None or not isinstance(body.get("fresh", False), bool):
                     self.send_bytes(400, "application/json", json_bytes({"error": "fresh must be boolean"}))
+                    return
+                setup = codex_setup_status()
+                if not setup["installed"] or not setup["authenticated"]:
+                    next_step = setup["install_command"] if not setup["installed"] else "codex"
+                    self.send_bytes(409, "application/json", json_bytes({
+                        "started": False, "message": setup["message"], "next_step": next_step,
+                    }))
                     return
                 started, message = run_manager.start(fresh=body.get("fresh", False))
                 self.send_bytes(200 if started else 409, "application/json", json_bytes({"started": started, "message": message}))

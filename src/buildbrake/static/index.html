@@ -341,6 +341,7 @@
 <main>
   <header><div><h1>Build<span class="mark">Brake</span></h1><p class="brand-copy">Task controls and run history</p></div><div class="pill">Local</div></header>
   <div id="restart-notice" class="restart-notice" hidden><strong>Dashboard restart required</strong><br>BuildBrake’s backend changed. Stop the current server with Ctrl+C, then run:<br><code>./bb serve</code><button type="button" onclick="copyRestartCommand(this)">Copy command</button></div>
+  <div id="codex-notice" class="restart-notice" hidden><strong>Codex setup required</strong><br><span id="codex-message">Codex CLI is required to run AI tasks.</span><span id="codex-install-step"><br><code>curl -fsSL https://chatgpt.com/codex/install.sh | sh</code><button type="button" onclick="copyCodexInstall(this)">Copy install command</button></span><br>Run <code>codex</code> and sign in with your own account. Check again with <code>bb doctor</code>.</div>
   <aside class="companion" aria-label="Build workflow">
     <span class="eyebrow">Workflow</span>
     <h2>Ship the result you intended.</h2>
@@ -420,6 +421,7 @@ let pendingEvaluation = null;
 let savedTaskAvailable = false;
 let taskCostEstimate = null;
 let taskRunPlan = null;
+let codexReady = true;
 function projectRelative(value) {
   const text = String(value ?? '');
   if (!projectRoot) return text;
@@ -437,6 +439,18 @@ async function copyRestartCommand(button) {
   await navigator.clipboard.writeText('./bb serve');
   button.textContent = 'Copied';
   setTimeout(() => button.textContent = 'Copy command', 1600);
+}
+async function copyCodexInstall(button) {
+  await navigator.clipboard.writeText('curl -fsSL https://chatgpt.com/codex/install.sh | sh');
+  button.textContent = 'Copied';
+  setTimeout(() => button.textContent = 'Copy install command', 1600);
+}
+function showCodexNotice(setup) {
+  codexReady = setup?.installed === true && setup?.authenticated === true;
+  const notice = document.querySelector('#codex-notice');
+  notice.hidden = codexReady;
+  document.querySelector('#codex-message').textContent = setup?.message || 'Codex CLI is required to run AI tasks.';
+  document.querySelector('#codex-install-step').hidden = setup?.installed === true;
 }
 function resetEvaluationDialog() {
   pendingEvaluation = null;
@@ -584,8 +598,10 @@ function renderAgentRun(run) {
   const statusClass = run.status === 'completed' ? 'good' : ['failed','stopped'].includes(run.status) ? 'bad' : '';
   const controls = running
     ? `<button class="stop" type="button" onclick="stopAgent()">Stop agent</button>`
-    : savedTaskAvailable
+    : savedTaskAvailable && codexReady
       ? `<div><span class="context-option"><label class="context-choice"><input id="fresh-context" type="checkbox" ${freshContext ? 'checked' : ''}>Force fresh context</label><span class="context-info" tabindex="0" role="img" aria-label="Manual override. BuildBrake normally chooses the cheaper context automatically. This starts a new Codex conversation without changing project files.">i</span></span><button type="button" onclick="runAgent()">Run saved task</button></div>`
+      : savedTaskAvailable
+        ? '<span class="bad">Complete Codex setup above before running this task</span>'
       : '<span class="muted">Save a task to start an agent run</span>';
   const output = run.lines?.length ? `<div class="live-output">${run.lines.map(esc).join('<br>')}</div>` : '';
   const contextStatus = taskRunPlan?.context_reason || (contextRotationReason
@@ -656,7 +672,7 @@ async function loadState(populateForm = false) {
   try {
   const response = await fetch('/api/state', {cache: 'no-store'});
   if (!response.ok) throw new Error(`server returned ${response.status}`);
-  const {contract: c, receipts, active_run, project_root, codex_context_saved, codex_context_rotation_reason, task_saved, task_cost_estimate, task_run_plan, restart_required, model_performance = [], forecast_performance = {}, token_savings_summary = {}, waste_summary = {}} = await response.json();
+  const {contract: c, receipts, active_run, project_root, codex_setup, codex_context_saved, codex_context_rotation_reason, task_saved, task_cost_estimate, task_run_plan, restart_required, model_performance = [], forecast_performance = {}, token_savings_summary = {}, waste_summary = {}} = await response.json();
   projectRoot = project_root || '';
   document.querySelector('#project-location').textContent = projectRoot || 'Unknown project';
   savedCodexContext = codex_context_saved === true;
@@ -665,6 +681,7 @@ async function loadState(populateForm = false) {
   taskCostEstimate = task_cost_estimate || null;
   taskRunPlan = task_run_plan || null;
   showRestartNotice(restart_required === true);
+  showCodexNotice(codex_setup);
   const run = active_run || {status:'idle',elapsed_seconds:0,lines:[]};
   renderAgentRun(run);
   const form = document.querySelector('#task-form');

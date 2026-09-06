@@ -16,6 +16,43 @@ CLI = [sys.executable, "-m", "buildbrake.cli"]
 
 
 class BuildBrakeTests(unittest.TestCase):
+    def test_doctor_explains_how_to_install_missing_codex(self):
+        from buildbrake.cli import CODEX_INSTALL_COMMAND, build_parser
+
+        with patch("buildbrake.cli.find_codex", return_value=None), \
+                patch("builtins.print") as output:
+            result = build_parser().parse_args(["doctor"]).func(
+                build_parser().parse_args(["doctor"])
+            )
+        rendered = "\n".join(" ".join(map(str, call.args)) for call in output.call_args_list)
+        self.assertEqual(result, 1)
+        self.assertIn(CODEX_INSTALL_COMMAND, rendered)
+        self.assertIn("codex", rendered)
+
+    def test_codex_setup_status_checks_login(self):
+        from buildbrake.cli import codex_setup_status
+
+        completed = subprocess.CompletedProcess([], 0, "Logged in using ChatGPT")
+        with patch("buildbrake.cli.find_codex", return_value="/bin/codex"), \
+                patch("buildbrake.cli.subprocess.run", return_value=completed) as run:
+            status = codex_setup_status()
+        self.assertTrue(status["installed"])
+        self.assertTrue(status["authenticated"])
+        run.assert_called_once()
+
+    def test_dashboard_contains_codex_setup_guidance(self):
+        html = (ROOT / "src/buildbrake/static/index.html").read_text()
+        self.assertIn('id="codex-notice"', html)
+        self.assertIn("chatgpt.com/codex/install.sh", html)
+        self.assertIn("showCodexNotice(codex_setup)", html)
+        self.assertIn("setup?.installed === true", html)
+
+    def test_dashboard_blocks_agent_start_until_codex_is_ready(self):
+        source = (ROOT / "src/buildbrake/dashboard.py").read_text()
+        start_route = source[source.index('if path == "/api/agent/start"'):]
+        self.assertLess(start_route.index("codex_setup_status()"), start_route.index("run_manager.start"))
+        self.assertIn('next_step = setup["install_command"]', start_route)
+
     def test_token_savings_uses_earlier_comparable_median(self):
         from buildbrake.cli import estimate_token_savings
 

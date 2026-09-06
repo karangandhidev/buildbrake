@@ -1148,6 +1148,58 @@ def find_codex() -> str | None:
     return None
 
 
+CODEX_INSTALL_COMMAND = "curl -fsSL https://chatgpt.com/codex/install.sh | sh"
+
+
+def codex_setup_status() -> dict[str, object]:
+    codex = find_codex()
+    if not codex:
+        return {
+            "installed": False, "authenticated": False, "path": None,
+            "message": "Codex CLI is required before BuildBrake can run an AI task.",
+            "install_command": CODEX_INSTALL_COMMAND,
+        }
+    try:
+        result = subprocess.run(
+            [codex, "login", "status"], text=True, stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT, timeout=5, check=False,
+        )
+        authenticated = result.returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        authenticated = False
+    return {
+        "installed": True, "authenticated": authenticated, "path": codex,
+        "message": "Codex is ready." if authenticated else "Codex is installed but needs sign-in.",
+        "install_command": CODEX_INSTALL_COMMAND,
+    }
+
+
+def show_doctor(args: argparse.Namespace) -> int:
+    root = Path(args.directory).resolve()
+    setup = codex_setup_status()
+    print("BUILDBRAKE DOCTOR")
+    print(f"✓ Python {sys.version_info.major}.{sys.version_info.minor}")
+    print(f"✓ Project: {root}")
+    print(f"{'✓' if (root / '.git').exists() else 'i'} Git: {'repository detected' if (root / '.git').exists() else 'not detected (optional)'}")
+    if not setup["installed"]:
+        print("✗ Codex CLI not found")
+        print("\nInstall Codex:")
+        print(CODEX_INSTALL_COMMAND)
+        print("\nThen sign in:")
+        print("codex")
+        print("\nRun bb doctor again when finished.")
+        return 1
+    print(f"✓ Codex found: {setup['path']}")
+    if not setup["authenticated"]:
+        print("✗ Codex needs sign-in")
+        print("\nRun: codex")
+        print("Then run bb doctor again.")
+        return 1
+    print("✓ Codex signed in")
+    print("✓ Ready — run bb serve")
+    return 0
+
+
 PREFLIGHT_STOPWORDS = {
     "about", "after", "agent", "build", "codex", "could", "develop", "from", "have",
     "into", "next", "project", "should", "that", "their", "this", "version", "with",
@@ -2027,6 +2079,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="buildbrake", description="Put an outcome and time limit around agent work.")
     parser.add_argument("--directory", "-C", default=".", help="project directory")
     sub = parser.add_subparsers(dest="action", required=True)
+
+    doctor = sub.add_parser("doctor", help="check BuildBrake, Codex, and project readiness")
+    doctor.set_defaults(func=show_doctor)
 
     init = sub.add_parser("init", help="create an outcome contract")
     init.add_argument("--problem")
