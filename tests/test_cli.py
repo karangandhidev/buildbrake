@@ -1219,6 +1219,21 @@ class BuildBrakeTests(unittest.TestCase):
         self.assertIn("context_packet = local_context_packet(", runner_source)
         self.assertNotIn('manifest_context = "Known project files:', runner_source)
 
+    def test_project_manifest_keeps_source_when_repository_exceeds_limit(self):
+        from buildbrake.cli import project_manifest
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "docs").mkdir()
+            (root / "src").mkdir()
+            for index in range(120):
+                (root / "docs" / f"{index:03}.md").write_text("reference")
+            (root / "src" / "late_widget.py").write_text("def render_widget(): return True\n")
+            manifest = project_manifest(root, limit=80)
+
+        self.assertIn("src/late_widget.py", manifest)
+        self.assertEqual(len(manifest), 80)
+
     def test_local_context_packet_ranks_and_bounds_relevant_source(self):
         from buildbrake.cli import local_context_packet
 

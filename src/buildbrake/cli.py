@@ -801,7 +801,25 @@ def project_manifest(root: Path, limit: int = 80) -> list[str]:
         ".py", ".rb", ".rs", ".scss", ".svelte", ".ts", ".tsx", ".vue", ".xml",
     }
     paths = [path for path in file_snapshot(root) if Path(path).suffix.lower() in useful_suffixes]
-    return sorted(paths)[:limit]
+
+    def manifest_priority(relative: str) -> tuple[int, str]:
+        normalized = relative.replace("\\", "/")
+        parts = normalized.split("/")
+        source_roots = {
+            "api", "app", "cmd", "components", "hooks", "internal", "lib", "pages",
+            "pkg", "server", "src", "utils",
+        }
+        if parts[0] in source_roots:
+            priority = 0
+        elif len(parts) == 1 and Path(normalized).suffix.lower() not in {".json", ".md", ".xml"}:
+            priority = 1
+        elif parts[0] in {"test", "tests", "spec", "specs"}:
+            priority = 2
+        else:
+            priority = 3
+        return priority, normalized
+
+    return sorted(paths, key=manifest_priority)[:limit]
 
 
 def snapshot_changes(before: dict[str, str], after: dict[str, str]) -> list[str]:
