@@ -1,5 +1,9 @@
 # BuildBrake
 
+[![CI](https://github.com/karangandhidev/buildbrake/actions/workflows/ci.yml/badge.svg)](https://github.com/karangandhidev/buildbrake/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/karangandhidev/buildbrake)](https://github.com/karangandhidev/buildbrake/releases/latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 BuildBrake puts a clear outcome, resource limits, and proof around work performed by Codex.
 
 Across nine controlled comparisons using identical tasks, models, and starting
