@@ -336,90 +336,11 @@
     @media (max-width: 1050px) { .run-layout { grid-template-columns: 1fr; } .run-resources { border-top: 1px solid var(--line); border-left: 0; } .resource-comparison { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
     @media (max-width: 920px) { main { padding-left: 24px; padding-right: 24px; } .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .resource-comparison { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 680px) { main { padding-left: 16px; padding-right: 16px; } .companion, .new-task, .run-primary, .run-resources { padding: 22px; } .contract, .journey, .summary { grid-template-columns: 1fr; } .contract .success { grid-column: auto; } .form-grid { grid-template-columns: 1fr; } .resource-row { display: flex; } .resource-status { text-align: left; } .decision { align-items: stretch; flex-direction: column; } .decision-actions { width: 100%; justify-content: flex-start; margin-left: 0; } }
-    /* Shared visual language with buildbrake.karangandhi.dev. */
-    :root { --page:#f4f1e9; --panel:#faf8f2; --ink:#111410; --subtle:#5f645d; --line:#cdc7b9; --orange:#ff5c35; --green:#1c6b45; --red:#a33a2b; --night:#121611; background:var(--page); color:var(--ink); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
-    body { background:var(--page); color:var(--ink); }
-    main { width:min(1280px,calc(100% - 48px)); max-width:none; padding:0 0 96px; }
-    header { min-height:78px; margin-bottom:42px; padding:0; border-color:var(--line); }
-    header > div:first-child { align-items:center; }
-    h1 { display:inline-flex; align-items:center; gap:10px; color:var(--ink); font-size:1.08rem; font-weight:760; letter-spacing:-.04em; }
-    .brake-mark { position:relative; display:inline-flex; width:26px; height:26px; flex:0 0 26px; align-items:center; justify-content:center; border:2px solid var(--ink); border-radius:50%; }
-    .brake-mark::before,.brake-mark::after,.brake-mark span { content:''; position:absolute; width:2px; height:15px; border-radius:3px; background:var(--ink); }
-    .brake-mark::before { left:8px; transform:rotate(-28deg); }
-    .brake-mark::after { right:8px; transform:rotate(28deg); }
-    .brake-mark span { bottom:3px; height:8px; }
-    .brand-copy { color:var(--subtle); }
-    .pill { border-color:var(--ink); border-radius:999px; background:var(--ink); color:var(--page); }
-    .pill::before { background:#55ad76; }
-    .companion { margin-bottom:38px; padding:34px 38px; border:0; border-radius:0; background:var(--night); color:#f3efe5; box-shadow:9px 9px 0 #ded8ca; }
-    .companion .eyebrow { color:#ff8264; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
-    .companion h2 { color:#f3efe5; font-size:clamp(1.7rem,3vw,2.4rem); font-weight:720; letter-spacing:-.045em; }
-    .companion > p,.side-note { color:#a4aa9f; }
-    .journey li { border-color:#394037; border-radius:0; background:#181d17; color:#d9ddd5; }
-    .journey li::before { border-color:#5e675b; background:var(--night); color:#ff8264; }
-    .side-note { border-color:#394037; }
-    .new-task,.contract,.metric,.run { border-color:var(--line); border-radius:0; background:var(--panel); }
-    .new-task { padding:34px 38px; }
-    .quick-task { border-top:4px solid var(--orange); box-shadow:8px 8px 0 #e8e2d5; }
-    .quick-task h2 { color:var(--ink); font-size:1.08rem; }
-    .quick-task h2::after { background:#f4ddd4; color:#8e321d; }
-    label,.task-size legend { color:var(--subtle); }
-    input,textarea,select { border-color:#aaa59a; border-radius:4px; background:#fffdf7; color:var(--ink); }
-    input:focus,textarea:focus,select:focus { border-color:var(--orange); background:#fffdf7; box-shadow:0 0 0 3px rgba(255,92,53,.16); }
-    .project-location { color:var(--subtle); }
-    .project-location code { background:#e7e4db; color:var(--ink); }
-    .task-size-option span { border-color:#aaa59a; border-radius:4px; background:#fffdf7; color:var(--subtle); }
-    .task-size-option:hover span { border-color:#777a72; background:#f2eee5; }
-    .task-size-option input:checked + span { border-color:var(--orange); background:#f7e3dc; color:#742a18; box-shadow:inset 0 0 0 1px var(--orange); }
-    .task-size-option input:focus-visible + span { outline-color:var(--orange); }
-    button { border-color:#aaa59a; border-radius:4px; background:#f0ede4; color:var(--ink); }
-    button:hover { border-color:var(--ink); background:#e5e0d5; }
-    button:focus-visible,summary:focus-visible { outline-color:var(--orange); }
-    .primary,.primary:hover { border-color:var(--orange); background:var(--orange); color:#17120f; box-shadow:0 4px 0 #bb3617; }
-    .primary:active { box-shadow:0 2px 0 #bb3617; transform:translateY(2px); }
-    .run-task-button,.run-task-button:hover { border-color:var(--green); background:var(--green); color:#fff; }
-    button.stop,button.stop:hover { border-color:var(--red); background:var(--red); }
-    .restart-notice { border-color:#c89e3b; background:#fff3cc; color:#584310; }
-    .restart-notice code,.command-box,.live-output { border-color:var(--line); background:#eeeadf; color:var(--ink); }
-    .contract { border-color:var(--line); background:var(--line); }
-    .contract .field { border-color:var(--line); background:var(--panel); }
-    .contract .success { border-left-color:var(--green); background:#e7ede3; }
-    .contract .success strong { color:var(--green); }
-    .contract .success span { color:#173e24; }
-    .summary { gap:1px; padding:1px; border:1px solid var(--line); background:var(--line); }
-    .metric { min-height:112px; padding:20px; border:0; background:var(--panel); }
-    .metric b { color:var(--ink); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:1.8rem; }
-    .metric span,.metric small,.muted { color:var(--subtle); }
-    .section-head { border-color:var(--line); }
-    .section-head h2 { color:var(--ink); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.75rem; letter-spacing:.08em; text-transform:uppercase; }
-    .run { border-color:#bdb6a7; box-shadow:7px 7px 0 #e8e2d5; }
-    .run-head { border-color:var(--line); background:#eeeadf; }
-    .run-id { color:var(--subtle); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
-    .tag { border-color:var(--line); border-radius:999px; background:var(--panel); }
-    .run-task { border-color:var(--line); background:var(--panel); color:var(--ink); font-family:inherit; }
-    .run-primary-meta { border-color:var(--line); background:var(--line); }
-    .run-primary-meta > div,.resource-row,.usage-value { border-color:var(--line); background:#fffdf7; }
-    .run-primary-meta strong,.run-resources strong,.resource-name { color:var(--subtle); }
-    .file-list { background:#eeeadf; color:var(--ink); }
-    .run-resources { border-color:var(--line); background:#f0ede4; }
-    .run-interpretation { border-color:var(--line); border-left-color:var(--green); background:#e9ede3; }
-    .decision { border-color:var(--line); background:#f0ede4; }
-    .finding { border-color:#b8c8b6; background:#edf2e8; }
-    .finding > summary { border-color:#b8c8b6; background:#e2eadc; color:#285438; }
-    .finding > pre { background:#f3f6ef; color:#203e2a; }
-    .decision .proved-button { border-color:var(--green); background:var(--green); }
-    .decision .not-proved-button { border-color:var(--red); background:var(--red); }
-    .good { color:var(--green); }
-    .bad { color:var(--red); }
-    .cost-diagnosis { border-left-color:var(--orange); background:#fae9df; color:#65301e; }
-    dialog { border-color:var(--line); border-radius:0; background:var(--panel); box-shadow:9px 9px 0 rgba(17,20,16,.2); }
-    footer { border-color:var(--line); color:var(--subtle); }
-    @media (max-width:680px) { main { width:min(100% - 30px,1280px); } header { margin-bottom:28px; } header > div:first-child { align-items:flex-start; flex-direction:column; gap:7px; } .brand-copy { margin-left:0; } .companion,.new-task { padding:24px; } .quick-task,.companion,.run { box-shadow:5px 5px 0 #e8e2d5; } }
   </style>
 </head>
 <body>
 <main>
-  <header><div><h1><span class="brake-mark" aria-hidden="true"><span></span></span>BuildBrake</h1><p class="brand-copy">Task controls and run history</p></div><div class="pill">Local</div></header>
+  <header><div><h1>Build<span class="mark">Brake</span></h1><p class="brand-copy">Task controls and run history</p></div><div class="pill">Local</div></header>
   <div id="restart-notice" class="restart-notice" hidden><strong>Dashboard restart required</strong><br>BuildBrake’s backend changed. Stop the current server with Ctrl+C, then run:<br><code>./bb serve</code><button type="button" onclick="copyRestartCommand(this)">Copy command</button></div>
   <div id="codex-notice" class="restart-notice" hidden><strong>Codex setup required</strong><br><span id="codex-message">Codex CLI is required to run AI tasks.</span><span id="codex-install-step"><br><code>curl -fsSL https://chatgpt.com/codex/install.sh | sh</code><button type="button" onclick="copyCodexInstall(this)">Copy install command</button></span><br>Run <code>codex</code> and sign in with your own account. Check again with <code>bb doctor</code>.</div>
   <aside class="companion" aria-label="Build workflow">
